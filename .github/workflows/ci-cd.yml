@@ -95,26 +95,68 @@ jobs:
           echo "🚀 Initializing Terraform..."
           terraform init
 
+          # Set variables
+          PROJECT_ID="${{ secrets.PROJECT_ID }}"
+          REGION="${{ secrets.REGION }}"
+          BUCKET_NAME="${{ secrets.STORAGE_BUCKET_NAME }}"
+
+          echo "🔍 Checking for existing resources and importing if needed..."
+
+          # Import VPC if exists
+          if gcloud compute networks describe yappa-vpc --project=$PROJECT_ID >/dev/null 2>&1; then
+            echo "📥 Importing existing VPC..."
+            terraform import -var="project_id=$PROJECT_ID" -var="region=$REGION" -var="environment=dev" -var="db_password=${{ secrets.DB_PASSWORD }}" -var="storage_bucket_name=$BUCKET_NAME" -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" google_compute_network.vpc "projects/$PROJECT_ID/global/networks/yappa-vpc" 2>/dev/null || true
+          fi
+
+          # Import Service Accounts if exist
+          for sa in cloud-run-sa yappa-admin-sa yappa-backup-sa vpn-test-sa; do
+            if gcloud iam service-accounts describe $sa@$PROJECT_ID.iam.gserviceaccount.com --project=$PROJECT_ID >/dev/null 2>&1; then
+              echo "� Importing existing service account: $sa..."
+              SA_RESOURCE=$(echo $sa | sed 's/-/_/g')
+              terraform import -var="project_id=$PROJECT_ID" -var="region=$REGION" -var="environment=dev" -var="db_password=${{ secrets.DB_PASSWORD }}" -var="storage_bucket_name=$BUCKET_NAME" -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" google_service_account.$SA_RESOURCE "projects/$PROJECT_ID/serviceAccounts/$sa@$PROJECT_ID.iam.gserviceaccount.com" 2>/dev/null || true
+            fi
+          done
+
+          # Import Storage Buckets if exist
+          if gsutil ls gs://$BUCKET_NAME >/dev/null 2>&1; then
+            echo "📥 Importing existing bucket: $BUCKET_NAME..."
+            terraform import -var="project_id=$PROJECT_ID" -var="region=$REGION" -var="environment=dev" -var="db_password=${{ secrets.DB_PASSWORD }}" -var="storage_bucket_name=$BUCKET_NAME" -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" google_storage_bucket.bucket "$BUCKET_NAME" 2>/dev/null || true
+          fi
+
+          if gsutil ls gs://$BUCKET_NAME-logs >/dev/null 2>&1; then
+            echo "📥 Importing existing logs bucket..."
+            terraform import -var="project_id=$PROJECT_ID" -var="region=$REGION" -var="environment=dev" -var="db_password=${{ secrets.DB_PASSWORD }}" -var="storage_bucket_name=$BUCKET_NAME" -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" google_storage_bucket.logs_bucket "$BUCKET_NAME-logs" 2>/dev/null || true
+          fi
+
+          # Import VPN Gateway IP if exists
+          if gcloud compute addresses describe vpn-gateway-ip --region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
+            echo "📥 Importing existing VPN Gateway IP..."
+            terraform import -var="project_id=$PROJECT_ID" -var="region=$REGION" -var="environment=dev" -var="db_password=${{ secrets.DB_PASSWORD }}" -var="storage_bucket_name=$BUCKET_NAME" -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" google_compute_address.vpn_gateway_ip "projects/$PROJECT_ID/regions/$REGION/addresses/vpn-gateway-ip" 2>/dev/null || true
+          fi
+
+          echo "📊 Current Terraform state:"
+          terraform state list || echo "No resources in state yet"
+
           echo "✅ Validating configuration..."
           terraform validate
 
           echo "📋 Planning infrastructure..."
           terraform plan \
-            -var="project_id=${{ secrets.PROJECT_ID }}" \
-            -var="region=${{ secrets.REGION }}" \
+            -var="project_id=$PROJECT_ID" \
+            -var="region=$REGION" \
             -var="environment=dev" \
             -var="db_password=${{ secrets.DB_PASSWORD }}" \
-            -var="storage_bucket_name=${{ secrets.STORAGE_BUCKET_NAME }}" \
+            -var="storage_bucket_name=$BUCKET_NAME" \
             -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
             -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}"
 
           echo "🏗️ Applying infrastructure..."
           terraform apply -auto-approve \
-            -var="project_id=${{ secrets.PROJECT_ID }}" \
-            -var="region=${{ secrets.REGION }}" \
+            -var="project_id=$PROJECT_ID" \
+            -var="region=$REGION" \
             -var="environment=dev" \
             -var="db_password=${{ secrets.DB_PASSWORD }}" \
-            -var="storage_bucket_name=${{ secrets.STORAGE_BUCKET_NAME }}" \
+            -var="storage_bucket_name=$BUCKET_NAME" \
             -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
             -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}"
 
