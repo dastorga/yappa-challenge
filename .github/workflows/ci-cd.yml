@@ -98,23 +98,66 @@ jobs:
           echo "✅ Validating configuration..."
           terraform validate
 
-          echo "📋 Planning infrastructure..."
+          echo "� Importing existing resources to avoid conflicts..."
+
+          # Function to safely import if resource exists
+          import_if_exists() {
+            local tf_resource="$1"
+            local gcp_id="$2"
+            local resource_name="$3"
+            
+            echo "🔍 Checking $resource_name..."
+            
+            # Check if already in state
+            if terraform state show "$tf_resource" >/dev/null 2>&1; then
+              echo "✅ $resource_name already in state"
+              return 0
+            fi
+            
+            # Try to import
+            if terraform import "$tf_resource" "$gcp_id" >/dev/null 2>&1; then
+              echo "📥 Imported existing $resource_name"
+            else
+              echo "ℹ️ $resource_name will be created (not found or import failed)"
+            fi
+          }
+
+          # Import common existing resources
+          PROJECT_ID="${{ secrets.PROJECT_ID }}"
+          REGION="${{ secrets.REGION }}"
+          BUCKET_NAME="${{ secrets.STORAGE_BUCKET_NAME }}"
+
+          # Import network resources
+          import_if_exists "google_compute_network.vpc" "projects/$PROJECT_ID/global/networks/yappa-vpc" "VPC Network"
+          import_if_exists "google_compute_address.vpn_gateway_ip" "projects/$PROJECT_ID/regions/$REGION/addresses/vpn-gateway-ip" "VPN Gateway IP"
+          
+          # Import storage resources
+          import_if_exists "google_storage_bucket.bucket" "$BUCKET_NAME" "Main Storage Bucket"  
+          import_if_exists "google_storage_bucket.logs_bucket" "$BUCKET_NAME-logs" "Logs Storage Bucket"
+          
+          # Import service accounts  
+          import_if_exists "google_service_account.cloud_run_sa" "projects/$PROJECT_ID/serviceAccounts/cloud-run-sa@$PROJECT_ID.iam.gserviceaccount.com" "Cloud Run Service Account"
+          import_if_exists "google_service_account.admin_sa" "projects/$PROJECT_ID/serviceAccounts/yappa-admin-sa@$PROJECT_ID.iam.gserviceaccount.com" "Admin Service Account"
+          import_if_exists "google_service_account.backup_sa" "projects/$PROJECT_ID/serviceAccounts/yappa-backup-sa@$PROJECT_ID.iam.gserviceaccount.com" "Backup Service Account"
+          import_if_exists "google_service_account.vpn_test_sa" "projects/$PROJECT_ID/serviceAccounts/vpn-test-sa@$PROJECT_ID.iam.gserviceaccount.com" "VPN Test Service Account"
+
+          echo "📋 Planning infrastructure after imports..."
           terraform plan \
-            -var="project_id=${{ secrets.PROJECT_ID }}" \
-            -var="region=${{ secrets.REGION }}" \
+            -var="project_id=$PROJECT_ID" \
+            -var="region=$REGION" \
             -var="environment=dev" \
             -var="db_password=${{ secrets.DB_PASSWORD }}" \
-            -var="storage_bucket_name=${{ secrets.STORAGE_BUCKET_NAME }}" \
+            -var="storage_bucket_name=$BUCKET_NAME" \
             -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
             -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}"
 
-          echo "🏗️ Applying infrastructure..."
+          echo "🏗️ Applying infrastructure changes..."
           terraform apply -auto-approve \
-            -var="project_id=${{ secrets.PROJECT_ID }}" \
-            -var="region=${{ secrets.REGION }}" \
+            -var="project_id=$PROJECT_ID" \
+            -var="region=$REGION" \
             -var="environment=dev" \
             -var="db_password=${{ secrets.DB_PASSWORD }}" \
-            -var="storage_bucket_name=${{ secrets.STORAGE_BUCKET_NAME }}" \
+            -var="storage_bucket_name=$BUCKET_NAME" \
             -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
             -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}"
 
