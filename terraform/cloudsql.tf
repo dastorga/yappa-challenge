@@ -25,7 +25,6 @@ resource "google_sql_database_instance" "postgres_instance" {
     ip_configuration {
       ipv4_enabled    = false
       private_network = google_compute_network.vpc.id
-      require_ssl     = false
     }
 
     # Configuración de mantenimiento
