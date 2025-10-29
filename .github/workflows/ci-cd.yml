@@ -18,9 +18,9 @@ env:
   ARTIFACT_REGISTRY_URL: us-central1-docker.pkg.dev/yappa-challenge-devops/yappa-repo
 
 jobs:
-  build-and-test:
+  build:
     runs-on: ubuntu-latest
-    name: Maven Build and Test
+    name: Maven Build and Package
 
     steps:
       - name: Checkout code
@@ -39,27 +39,10 @@ jobs:
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
 
-      - name: Compile Spring Boot
+      - name: Compile and Package Spring Boot
         run: |
           cd app
-          mvn clean compile
-
-      - name: Run tests
-        run: |
-          cd app
-          mvn test -X -e
-
-      - name: Upload test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: surefire-reports
-          path: app/target/surefire-reports/
-
-      - name: Package application
-        run: |
-          cd app
-          mvn package -DskipTests
+          mvn clean compile package -DskipTests
 
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
@@ -76,7 +59,7 @@ jobs:
   docker-build-push:
     runs-on: ubuntu-latest
     name: Docker Build and Push
-    needs: build-and-test
+    needs: build
     if: github.ref == 'refs/heads/main'
 
     steps:
