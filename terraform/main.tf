@@ -1,4 +1,3 @@
-# Configuración de Terraform
 terraform {
   required_version = ">= 1.0"
 
@@ -8,15 +7,13 @@ terraform {
     }
   }
 
-  # Backend local por defecto (para evitar problemas de bucket)
-  # Para usar GCS backend, descomentar y crear bucket manualmente:
-  # backend "gcs" {
-  #   bucket = "yappa-terraform-state" 
-  #   prefix = "terraform/state"
-  # }
+  backend "gcs" {
+    bucket = "yappa-challenge-tfstate"
+    prefix = "terraform/state"
+  }
 }
 
-# Provider de Google Cloud
+# Configuración del proveedor de Google
 provider "google" {
   project = var.project_id
   region  = var.region
