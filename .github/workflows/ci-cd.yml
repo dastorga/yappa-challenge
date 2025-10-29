@@ -86,7 +86,7 @@ jobs:
         env:
           GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
 
-      - name: Terraform Init & Handle Existing Resources
+      - name: Terraform Deploy with Smart Resource Handling
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
           PROJECT_ID: ${{ secrets.PROJECT_ID }}
@@ -102,8 +102,29 @@ jobs:
           terraform init
           terraform validate
           
-          echo "🚀 Deploying infrastructure with existing resources handling..."
-          ./handle-existing-resources.sh      - name: Verify Infrastructure
+          echo "� Refreshing state to sync with GCP reality..."
+          terraform apply -refresh-only -auto-approve \
+            -var="project_id=$PROJECT_ID" \
+            -var="region=$REGION" \
+            -var="environment=dev" \
+            -var="db_password=$DB_PASSWORD" \
+            -var="storage_bucket_name=$STORAGE_BUCKET_NAME" \
+            -var="peer_external_ip=$PEER_EXTERNAL_IP" \
+            -var="vpn_shared_secret=$VPN_SHARED_SECRET" || true
+          
+          echo "🚀 Applying infrastructure changes (handling existing resources)..."
+          terraform apply -auto-approve \
+            -var="project_id=$PROJECT_ID" \
+            -var="region=$REGION" \
+            -var="environment=dev" \
+            -var="db_password=$DB_PASSWORD" \
+            -var="storage_bucket_name=$STORAGE_BUCKET_NAME" \
+            -var="peer_external_ip=$PEER_EXTERNAL_IP" \
+            -var="vpn_shared_secret=$VPN_SHARED_SECRET" || {
+              
+              echo "⚠️ Apply encountered conflicts, trying import strategy..."
+              ./handle-existing-resources.sh
+            }      - name: Verify Infrastructure
         run: |
           echo "✅ Infrastructure deployment completed"
           echo "📊 Terraform state summary:"

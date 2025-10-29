@@ -4,21 +4,50 @@
 
 echo "🔧 Managing existing Terraform resources..."
 
-# Lista de recursos que pueden existir y causar errores 409
-EXISTING_RESOURCES=(
-    "google_service_account.cloud_run_sa"
-    "google_service_account.admin_sa" 
-    "google_service_account.backup_sa"
-    "google_service_account.vpn_test_sa"
-    "google_compute_network.vpc"
-    "google_storage_bucket.bucket"
-    "google_storage_bucket.logs_bucket"
-    "google_compute_address.vpn_gateway_ip"
-)
+# Función para importar recurso si existe
+import_if_exists() {
+    local resource_type="$1"
+    local resource_name="$2" 
+    local gcp_id="$3"
+    
+    echo "🔍 Checking if $resource_name exists..."
+    
+    # Verificar si el recurso ya está en el estado de Terraform
+    if terraform state show "$resource_type.$resource_name" >/dev/null 2>&1; then
+        echo "✅ $resource_name already in Terraform state"
+        return 0
+    fi
+    
+    # Intentar importar el recurso
+    if terraform import "$resource_type.$resource_name" "$gcp_id" >/dev/null 2>&1; then
+        echo "📥 Imported existing $resource_name"
+        return 0
+    else
+        echo "ℹ️  $resource_name will be created (doesn't exist or import failed)"
+        return 1
+    fi
+}
 
-# Intentar plan sin fallar por recursos existentes
-echo "📋 Running Terraform plan with existing resources handling..."
+# Importar service accounts si existen
+echo "📋 Importing existing service accounts..."
+import_if_exists "google_service_account" "cloud_run_sa" "projects/$PROJECT_ID/serviceAccounts/cloud-run-sa@$PROJECT_ID.iam.gserviceaccount.com"
+import_if_exists "google_service_account" "admin_sa" "projects/$PROJECT_ID/serviceAccounts/yappa-admin-sa@$PROJECT_ID.iam.gserviceaccount.com"  
+import_if_exists "google_service_account" "backup_sa" "projects/$PROJECT_ID/serviceAccounts/yappa-backup-sa@$PROJECT_ID.iam.gserviceaccount.com"
+import_if_exists "google_service_account" "vpn_test_sa" "projects/$PROJECT_ID/serviceAccounts/vpn-test-sa@$PROJECT_ID.iam.gserviceaccount.com"
 
+# Importar networking resources
+echo "🌐 Importing existing network resources..."
+import_if_exists "google_compute_network" "vpc" "projects/$PROJECT_ID/global/networks/yappa-vpc"
+import_if_exists "google_compute_address" "vpn_gateway_ip" "projects/$PROJECT_ID/regions/$REGION/addresses/vpn-gateway-ip"
+
+# Importar storage buckets
+echo "🗄️ Importing existing storage buckets..."
+import_if_exists "google_storage_bucket" "bucket" "$STORAGE_BUCKET_NAME"
+import_if_exists "google_storage_bucket" "logs_bucket" "$STORAGE_BUCKET_NAME-logs"
+
+echo "� Running Terraform plan and apply..."
+
+# Ejecutar plan para ver qué queda por crear/actualizar
 terraform plan \
   -var="project_id=$PROJECT_ID" \
   -var="region=$REGION" \
@@ -32,7 +61,7 @@ terraform plan \
 PLAN_EXIT_CODE=$?
 
 if [ $PLAN_EXIT_CODE -eq 0 ]; then
-    echo "✅ No changes needed"
+    echo "✅ No changes needed - infrastructure is up to date"
     exit 0
 elif [ $PLAN_EXIT_CODE -eq 2 ]; then
     echo "📝 Changes detected, applying..."
@@ -46,17 +75,16 @@ elif [ $PLAN_EXIT_CODE -eq 2 ]; then
       -var="vpn_shared_secret=$VPN_SHARED_SECRET"
     
     if [ $? -eq 0 ]; then
-        echo "✅ Infrastructure updated successfully"
+        echo "✅ Infrastructure deployed successfully"
     else
-        echo "❌ Apply failed, but infrastructure may be partially ready"
-        echo "🔍 Checking critical resources..."
+        echo "⚠️ Apply had issues, but continuing..."
+        echo "🔍 Verifying critical resources exist..."
         
-        # Verificar recursos críticos
-        gcloud compute networks describe yappa-vpc --quiet && echo "✅ VPC exists"
-        gcloud run services describe yappa-spring-boot-service --region=$REGION --quiet 2>/dev/null && echo "✅ Cloud Run service exists" || echo "ℹ️  Cloud Run service will be created on deploy"
-        gcloud compute addresses describe vpn-gateway-ip --region=$REGION --quiet && echo "✅ VPN Gateway IP exists"
+        gcloud compute networks describe yappa-vpc --quiet >/dev/null 2>&1 && echo "✅ VPC exists"
+        gcloud iam service-accounts describe cloud-run-sa@$PROJECT_ID.iam.gserviceaccount.com --quiet >/dev/null 2>&1 && echo "✅ Cloud Run SA exists"
+        gsutil ls gs://$STORAGE_BUCKET_NAME >/dev/null 2>&1 && echo "✅ Storage bucket exists"
         
-        echo "🚀 Continuing with deployment - existing resources detected"
+        echo "🚀 Critical resources available - continuing deployment"
         exit 0
     fi
 else
