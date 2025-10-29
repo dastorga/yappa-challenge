@@ -1,0 +1,18 @@
+# Variables del proyecto - Copiar a terraform.tfvars y completar
+project_id = "yappa-challenge-devops"
+
+# Región (debe ser southamerica-east1 según requerimientos)
+region = "southamerica-east1"
+
+# Ambiente
+environment = "dev"
+
+# Cloud SQL
+db_password = "changeme-secure-password-123!"
+
+# Cloud Storage (debe ser único globalmente)
+storage_bucket_name = "yappa-challenge-storage-bucket-123"
+
+# VPN (opcional - cambiar por IP real de on-premises)
+peer_external_ip = "8.8.8.8"
+vpn_shared_secret = "changeme-vpn-secret-key-456"

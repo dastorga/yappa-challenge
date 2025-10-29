@@ -1,0 +1,73 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+terraform.tfvars
+*.auto.tfvars
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# Secrets
+*.pem
+*.key
+*.json
+secrets/
+.env
+.env.local
+azure-devops-key.json
+gcp-key.json
+service-account-*.json
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Monitoring
+grafana/data/
+prometheus/data/
+
+# Azure DevOps
+azure-devops-variables.txt
+validation-report-*.txt
+
+# Docker
+.dockerignore
+
+# Maven
+target/
+.mvn/
+mvnw
+mvnw.cmd
+
+# Java
+*.class
+*.jar
+!**/src/main/**/target/
+!**/src/test/**/target/

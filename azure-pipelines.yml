@@ -1,0 +1,329 @@
+# Azure DevOps Pipeline para Yappa Challenge DevOps
+# Pipeline YAML que compila Spring Boot, construye Docker, despliega en Cloud Run y maneja infraestructura Terraform
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - app/*
+      - terraform/*
+      - azure-pipelines.yml
+
+pr:
+  branches:
+    include:
+      - main
+      - develop
+
+variables:
+  # Variables del proyecto
+  - name: projectName
+    value: "yappa-challenge-devops"
+  - name: artifactRegistryRegion
+    value: "us-central1"
+  - name: cloudRunRegion
+    value: "us-central1"
+  - name: environment
+    value: "dev"
+  - name: serviceName
+    value: "yappa-spring-boot-service"
+
+  # Variables seguras (definir en Azure DevOps Variables)
+  # - GCP_PROJECT_ID: ID del proyecto GCP
+  # - GCP_SERVICE_ACCOUNT_KEY: Clave JSON del service account
+  # - ARTIFACT_REGISTRY_URL: URL del registry (us-central1-docker.pkg.dev/PROJECT_ID/yappa-repo)
+  # - CLOUD_SQL_INSTANCE_IP: IP de la instancia Cloud SQL (10.2.0.3)
+
+stages:
+  #############################################
+  # Stage 1: Compilación y Testing
+  #############################################
+  - stage: Build
+    displayName: "Build and Test"
+    jobs:
+      - job: MavenBuild
+        displayName: "Compile Spring Boot with Maven"
+        pool:
+          vmImage: "ubuntu-latest"
+
+        steps:
+          - checkout: self
+            fetchDepth: 1
+
+          - task: JavaToolInstaller@0
+            displayName: "Install Java 17"
+            inputs:
+              versionSpec: "17"
+              jdkArchitectureOption: "x64"
+              jdkSourceOption: "PreInstalled"
+
+          - task: Cache@2
+            displayName: "Cache Maven Dependencies"
+            inputs:
+              key: 'maven | "$(Agent.OS)" | app/pom.xml'
+              restoreKeys: |
+                maven | "$(Agent.OS)"
+                maven
+              path: $(Pipeline.Workspace)/.m2/repository
+
+          - task: Maven@3
+            displayName: "Maven Compile"
+            inputs:
+              mavenPomFile: "app/pom.xml"
+              goals: "clean compile"
+              options: "-Dmaven.repo.local=$(Pipeline.Workspace)/.m2/repository"
+              javaHomeOption: "JDKVersion"
+
+          - task: Maven@3
+            displayName: "Maven Test"
+            inputs:
+              mavenPomFile: "app/pom.xml"
+              goals: "test"
+              options: "-Dmaven.repo.local=$(Pipeline.Workspace)/.m2/repository"
+              javaHomeOption: "JDKVersion"
+              publishJUnitResults: true
+              testResultsFiles: "app/target/surefire-reports/TEST-*.xml"
+
+          - task: Maven@3
+            displayName: "Maven Package"
+            inputs:
+              mavenPomFile: "app/pom.xml"
+              goals: "package"
+              options: "-DskipTests -Dmaven.repo.local=$(Pipeline.Workspace)/.m2/repository"
+              javaHomeOption: "JDKVersion"
+
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish JAR Artifact"
+            inputs:
+              pathToPublish: "app/target"
+              artifactName: "spring-boot-jar"
+
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish App Source"
+            inputs:
+              pathToPublish: "app"
+              artifactName: "app-source"
+
+  #############################################
+  # Stage 2: Docker Build y Push
+  #############################################
+  - stage: DockerBuild
+    displayName: "Docker Build and Push"
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - job: DockerBuildPush
+        displayName: "Build Docker Image and Push to Artifact Registry"
+        pool:
+          vmImage: "ubuntu-latest"
+
+        steps:
+          - checkout: none
+
+          - task: DownloadBuildArtifacts@0
+            displayName: "Download App Source"
+            inputs:
+              artifactName: "app-source"
+              downloadPath: "$(System.DefaultWorkingDirectory)"
+
+          - task: GoogleCloudSdkTool@0
+            displayName: "Install Google Cloud SDK"
+            inputs:
+              version: "latest"
+
+          - script: |
+              echo '$(GCP_SERVICE_ACCOUNT_KEY)' | base64 -d > gcp-key.json
+              gcloud auth activate-service-account --key-file=gcp-key.json
+              gcloud config set project $(GCP_PROJECT_ID)
+              gcloud auth configure-docker $(artifactRegistryRegion)-docker.pkg.dev
+            displayName: "Authenticate with GCP"
+
+          - script: |
+              cd app-source
+              docker build -t $(ARTIFACT_REGISTRY_URL)/$(serviceName):$(Build.BuildNumber) .
+              docker build -t $(ARTIFACT_REGISTRY_URL)/$(serviceName):latest .
+            displayName: "Build Docker Image"
+
+          - script: |
+              docker push $(ARTIFACT_REGISTRY_URL)/$(serviceName):$(Build.BuildNumber)
+              docker push $(ARTIFACT_REGISTRY_URL)/$(serviceName):latest
+            displayName: "Push to Artifact Registry"
+
+          - script: |
+              rm -f gcp-key.json
+            displayName: "Cleanup Credentials"
+            condition: always()
+
+  #############################################
+  # Stage 3: Deploy a Cloud Run
+  #############################################
+  - stage: Deploy
+    displayName: "Deploy to Cloud Run"
+    dependsOn: DockerBuild
+    condition: succeeded()
+    jobs:
+      - deployment: DeployCloudRun
+        displayName: "Deploy to Cloud Run Dev Environment"
+        pool:
+          vmImage: "ubuntu-latest"
+        environment: "dev"
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  fetchDepth: 1
+
+                - task: GoogleCloudSdkTool@0
+                  displayName: "Install Google Cloud SDK"
+                  inputs:
+                    version: "latest"
+
+                - script: |
+                    echo '$(GCP_SERVICE_ACCOUNT_KEY)' | base64 -d > gcp-key.json
+                    gcloud auth activate-service-account --key-file=gcp-key.json
+                    gcloud config set project $(GCP_PROJECT_ID)
+                  displayName: "Authenticate with GCP"
+
+                - script: |
+                    gcloud run deploy $(serviceName) \
+                      --image=$(ARTIFACT_REGISTRY_URL)/$(serviceName):$(Build.BuildNumber) \
+                      --region=$(cloudRunRegion) \
+                      --platform=managed \
+                      --allow-unauthenticated \
+                      --memory=1Gi \
+                      --cpu=1 \
+                      --max-instances=10 \
+                      --min-instances=1 \
+                      --port=8080 \
+                      --set-env-vars="SPRING_PROFILES_ACTIVE=dev,ENVIRONMENT=dev,GCP_PROJECT_ID=$(GCP_PROJECT_ID),CLOUD_SQL_INSTANCE_IP=$(CLOUD_SQL_INSTANCE_IP)" \
+                      --vpc-connector=projects/$(GCP_PROJECT_ID)/locations/$(cloudRunRegion)/connectors/yappa-vpc-connector \
+                      --vpc-egress=private-ranges-only
+                  displayName: "Deploy to Cloud Run"
+
+                - script: |
+                    SERVICE_URL=$(gcloud run services describe $(serviceName) --region=$(cloudRunRegion) --format='value(status.url)')
+                    echo "Service deployed at: $SERVICE_URL"
+                    echo "##vso[task.setvariable variable=SERVICE_URL]$SERVICE_URL"
+
+                    # Health check
+                    echo "Waiting for service to be ready..."
+                    sleep 30
+
+                    # Test endpoints
+                    curl -f "$SERVICE_URL/" || echo "Root endpoint failed"
+                    curl -f "$SERVICE_URL/actuator/health" || echo "Health endpoint failed"
+                    curl -f "$SERVICE_URL/api/info" || echo "Info endpoint failed"
+                  displayName: "Verify Deployment and Health Check"
+
+                - script: |
+                    rm -f gcp-key.json
+                  displayName: "Cleanup Credentials"
+                  condition: always()
+
+  #############################################
+  # Stage 4: Terraform Infrastructure
+  #############################################
+  - stage: Infrastructure
+    displayName: "Terraform Infrastructure"
+    dependsOn: [] # Ejecutar en paralelo con Build
+    jobs:
+      - job: TerraformPlan
+        displayName: "Terraform Plan"
+        pool:
+          vmImage: "ubuntu-latest"
+
+        steps:
+          - checkout: self
+            fetchDepth: 1
+
+          - task: GoogleCloudSdkTool@0
+            displayName: "Install Google Cloud SDK"
+            inputs:
+              version: "latest"
+
+          - script: |
+              # Install Terraform
+              wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
+              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+              sudo apt update && sudo apt install terraform
+              terraform --version
+            displayName: "Install Terraform"
+
+          - script: |
+              echo '$(GCP_SERVICE_ACCOUNT_KEY)' | base64 -d > gcp-key.json
+              export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/gcp-key.json"
+              gcloud auth activate-service-account --key-file=gcp-key.json
+              gcloud config set project $(GCP_PROJECT_ID)
+            displayName: "Authenticate with GCP"
+
+          - script: |
+              cd terraform
+              export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/../gcp-key.json"
+              terraform init
+              terraform validate
+              terraform plan -var="project_id=$(GCP_PROJECT_ID)" -out=tfplan
+            displayName: "Terraform Plan"
+
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish Terraform Plan"
+            inputs:
+              pathToPublish: "terraform/tfplan"
+              artifactName: "terraform-plan"
+
+          - script: |
+              rm -f gcp-key.json
+            displayName: "Cleanup Credentials"
+            condition: always()
+
+      - job: TerraformApply
+        displayName: "Terraform Apply"
+        dependsOn: TerraformPlan
+        condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+        pool:
+          vmImage: "ubuntu-latest"
+
+        steps:
+          - checkout: self
+            fetchDepth: 1
+
+          - task: DownloadBuildArtifacts@0
+            displayName: "Download Terraform Plan"
+            inputs:
+              artifactName: "terraform-plan"
+              downloadPath: "$(System.DefaultWorkingDirectory)"
+
+          - task: GoogleCloudSdkTool@0
+            displayName: "Install Google Cloud SDK"
+            inputs:
+              version: "latest"
+
+          - script: |
+              # Install Terraform
+              wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
+              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+              sudo apt update && sudo apt install terraform
+            displayName: "Install Terraform"
+
+          - script: |
+              echo '$(GCP_SERVICE_ACCOUNT_KEY)' | base64 -d > gcp-key.json
+              export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/gcp-key.json"
+              gcloud auth activate-service-account --key-file=gcp-key.json
+              gcloud config set project $(GCP_PROJECT_ID)
+            displayName: "Authenticate with GCP"
+
+          - script: |
+              cd terraform
+              export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/../gcp-key.json"
+              terraform init
+              cp ../terraform-plan/tfplan .
+              terraform apply tfplan
+            displayName: "Terraform Apply"
+
+          - script: |
+              rm -f gcp-key.json
+            displayName: "Cleanup Credentials"
+            condition: always()

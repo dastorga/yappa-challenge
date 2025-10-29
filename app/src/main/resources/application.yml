@@ -1,0 +1,107 @@
+# Configuración de la aplicación Spring Boot
+
+# Información de la aplicación
+app:
+  name: yappa-challenge
+  version: 1.0.0
+  environment: ${ENVIRONMENT:development}
+
+# Configuración del servidor
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+
+# Spring Boot Configuration
+spring:
+  application:
+    name: ${app.name}
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  # Datasource configuración para Cloud SQL
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/yappadb}
+    username: ${SPRING_DATASOURCE_USERNAME:yappa_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:changeme}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    open-in-view: false
+
+# Actuator endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${app.name}
+      environment: ${app.environment}
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+
+# Google Cloud Configuration
+google:
+  cloud:
+    project-id: ${GOOGLE_CLOUD_PROJECT:yappa-challenge-devops}
+    storage:
+      bucket-name: ${STORAGE_BUCKET_NAME:yappa-challenge-devops-storage-dev-20241028}
+    firestore:
+      enabled: true
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.yappa.challenge: ${LOG_LEVEL:INFO}
+    org.springframework.web: ${LOG_LEVEL:INFO}
+    org.hibernate: ${LOG_LEVEL:INFO}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %level - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+---
+# Perfil para desarrollo local
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:postgresql://10.2.0.3:5432/yappadb
+    username: yappa_user
+    password: ${DB_PASSWORD:changeme}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+google:
+  cloud:
+    project-id: yappa-challenge-devops
+    storage:
+      bucket-name: yappa-challenge-devops-storage-dev-20241028
