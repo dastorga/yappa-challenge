@@ -16,7 +16,7 @@ build/
 *.tfstate
 *.tfstate.*
 .terraform.lock.hcl
-terraform.tfvars
+# terraform.tfvars  # Comentado para incluir en repo (solo para demo)
 *.auto.tfvars
 
 # Kubernetes
