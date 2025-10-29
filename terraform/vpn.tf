@@ -91,7 +91,7 @@ resource "google_compute_route" "route_onprem" {
 
 # Firewall rule para permitir tráfico desde on-premises
 resource "google_compute_firewall" "allow_onprem" {
-  name    = "allow-onprem-traffic"
+  name    = "allow-challenge-onprem-traffic"
   network = google_compute_network.vpc.name
 
   allow {

@@ -54,7 +54,7 @@ resource "google_service_networking_connection" "private_vpc_connection" {
 
 # Firewall: Permitir tráfico interno en la VPC
 resource "google_compute_firewall" "allow_internal" {
-  name    = "allow-internal"
+  name    = "allow-challenge-internal"
   network = google_compute_network.vpc.name
 
   allow {
@@ -77,7 +77,7 @@ resource "google_compute_firewall" "allow_internal" {
 
 # Firewall: Permitir acceso a Cloud SQL (PostgreSQL)
 resource "google_compute_firewall" "allow_postgres" {
-  name    = "allow-postgres"
+  name    = "allow-challenge-postgres"
   network = google_compute_network.vpc.name
 
   allow {
@@ -92,7 +92,7 @@ resource "google_compute_firewall" "allow_postgres" {
 
 # Firewall: Permitir acceso SSH para administración
 resource "google_compute_firewall" "allow_ssh" {
-  name    = "allow-ssh"
+  name    = "allow-challenge-ssh"
   network = google_compute_network.vpc.name
 
   allow {
@@ -107,7 +107,7 @@ resource "google_compute_firewall" "allow_ssh" {
 
 # VPC Connector para Cloud Run
 resource "google_vpc_access_connector" "connector" {
-  name           = "yappa-vpc-connector"
+  name           = "yappa-challenge-vpc-connector"
   region         = var.region
   ip_cidr_range  = "10.9.0.0/28"
   network        = google_compute_network.vpc.name

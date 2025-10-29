@@ -106,6 +106,39 @@ jobs:
             echo "✅ Bucket de state creado y configurado"
           fi
 
+      - name: Import Existing Resources (if needed)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
+        run: |
+          cd terraform
+
+          echo "🔍 Verificando si App Engine ya existe..."
+
+          # Verificar si App Engine existe en GCP
+          if gcloud app describe --project=${{ secrets.PROJECT_ID }} >/dev/null 2>&1; then
+            echo "✅ App Engine existe en GCP"
+            
+            # Verificar si ya está en el state
+            if ! terraform state show google_app_engine_application.app_engine_application >/dev/null 2>&1; then
+              echo "📥 Importando App Engine al Terraform state..."
+              terraform import \
+                -var="project_id=${{ secrets.PROJECT_ID }}" \
+                -var="region=${{ secrets.REGION }}" \
+                -var="environment=dev" \
+                -var="db_password=${{ secrets.DB_PASSWORD }}" \
+                -var="storage_bucket_name=${{ secrets.STORAGE_BUCKET_NAME }}" \
+                -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
+                -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
+                google_app_engine_application.app_engine_application \
+                ${{ secrets.PROJECT_ID }}
+              echo "✅ App Engine importado correctamente"
+            else
+              echo "✅ App Engine ya está en el state"
+            fi
+          else
+            echo "ℹ️ App Engine no existe, Terraform lo creará"
+          fi
+
       - name: Terraform Init, Refresh and Apply
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
