@@ -135,6 +135,7 @@ jobs:
   terraform-plan:
     runs-on: ubuntu-latest
     name: Terraform Plan
+    environment: dev
 
     steps:
       - name: Checkout code
@@ -151,12 +152,27 @@ jobs:
           service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
           project_id: ${{ env.GCP_PROJECT_ID }}
 
+      - name: Set up Terraform credentials
+        run: |
+          echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' > /tmp/gcp-key.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
+
       - name: Terraform Init and Plan
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
         run: |
           cd terraform
           terraform init
           terraform validate
-          terraform plan -var-file="terraform.tfvars" -out=tfplan
+          terraform plan \
+            -var="project_id=${{ secrets.PROJECT_ID }}" \
+            -var="region=${{ secrets.REGION }}" \
+            -var="environment=dev" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="storage_bucket_name=${{ secrets.STORAGE_BUCKET_NAME }}" \
+            -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
+            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
+            -out=tfplan
 
       - name: Upload Terraform Plan
         uses: actions/upload-artifact@v4
@@ -169,6 +185,7 @@ jobs:
     name: Terraform Apply
     needs: terraform-plan
     if: github.ref == 'refs/heads/main'
+    environment: dev
 
     steps:
       - name: Checkout code
@@ -191,7 +208,14 @@ jobs:
           service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
           project_id: ${{ env.GCP_PROJECT_ID }}
 
+      - name: Set up Terraform credentials
+        run: |
+          echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' > /tmp/gcp-key.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
+
       - name: Terraform Apply
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
         run: |
           cd terraform
           terraform init
