@@ -20,13 +20,13 @@ variable "environment" {
 variable "vpc_name" {
   description = "Nombre de la VPC personalizada"
   type        = string
-  default     = "yappa-vpc"
+  default     = "yappa-challenge-vpc"
 }
 
 variable "private_subnet_name" {
   description = "Nombre de la subnet privada"
   type        = string
-  default     = "yappa-private-subnet"
+  default     = "yappa-challenge-private-subnet"
 }
 
 variable "private_subnet_cidr" {
