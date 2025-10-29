@@ -1,463 +1,208 @@
-name: Yappa Challenge DevOps CI/CDname: CI/CD Pipeline
+name: Yappa Challenge DevOps CI/CD
 
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'app/**'
+      - 'terraform/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main, develop ]
 
-
-on:on:
-
-  push:  push:
-
-    branches: [ main, develop ]    branches:
-
-    paths:      - main
-
-      - 'app/**'      - develop
-
-      - 'terraform/**'    tags:
-
-      - '.github/workflows/**'      - "v*"
-
-  pull_request:  pull_request:
-
-    branches: [ main, develop ]    branches:
-
-      - main
-
-env:      - develop
-
+env:
   GCP_PROJECT_ID: yappa-challenge-devops
-
-  ARTIFACT_REGISTRY_REGION: us-central1env:
-
-  CLOUD_RUN_REGION: us-central1  GCP_REGION: us-central1
-
-  SERVICE_NAME: yappa-spring-boot-service  GKE_CLUSTER: yappa-gke-cluster
-
-  ARTIFACT_REGISTRY_URL: us-central1-docker.pkg.dev/yappa-challenge-devops/yappa-repo  APP_NAME: yappa-challenge
-
-  NAMESPACE: yappa-app
+  ARTIFACT_REGISTRY_REGION: us-central1
+  CLOUD_RUN_REGION: us-central1
+  SERVICE_NAME: yappa-spring-boot-service
+  ARTIFACT_REGISTRY_URL: us-central1-docker.pkg.dev/yappa-challenge-devops/yappa-repo
 
 jobs:
-
-  #############################################jobs:
-
-  # Job 1: Build and Test Spring Boot  # Job 1: Lint y Tests
-
-  #############################################  test:
-
-  build-and-test:    name: Build and Test
-
-    runs-on: ubuntu-latest    runs-on: ubuntu-latest
-
+  build-and-test:
+    runs-on: ubuntu-latest
     name: Maven Build and Test
-
-        steps:
-
-    steps:      - name: Checkout code
-
-    - name: Checkout code        uses: actions/checkout@v4
-
+    
+    steps:
+    - name: Checkout code
       uses: actions/checkout@v4
-
-            - name: Set up JDK 17
-
-    - name: Set up JDK 17        uses: actions/setup-java@v4
-
-      uses: actions/setup-java@v4        with:
-
-      with:          distribution: "temurin"
-
-        java-version: '17'          java-version: "17"
-
-        distribution: 'temurin'          cache: "maven"
-
+      
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
         
-
-    - name: Cache Maven dependencies      - name: Build with Maven
-
-      uses: actions/cache@v4        run: |
-
-      with:          cd app
-
-        path: ~/.m2          mvn clean compile -B
-
+    - name: Cache Maven dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
         key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-
-        restore-keys: ${{ runner.os }}-m2      - name: Run tests
-
-                run: |
-
-    - name: Compile Spring Boot          cd app
-
-      run: |          mvn test -B
-
-        cd app
-
-        mvn clean compile      - name: Generate coverage report
-
-                run: |
-
-    - name: Run tests          cd app
-
-      run: |          mvn jacoco:report
-
-        cd app
-
-        mvn test      - name: Upload coverage reports
-
-                uses: codecov/codecov-action@v3
-
-    - name: Package application        with:
-
-      run: |          file: ./app/target/site/jacoco/jacoco.xml
-
-        cd app          flags: unittests
-
-        mvn package -DskipTests          name: codecov-umbrella
-
+        restore-keys: ${{ runner.os }}-m2
         
-
-    - name: Upload JAR artifact  # Job 2: Build y Push Docker Image
-
-      uses: actions/upload-artifact@v4  build:
-
-      with:    name: Build and Push Docker Image
-
-        name: spring-boot-jar    runs-on: ubuntu-latest
-
-        path: app/target/*.jar    needs: test
-
-            if: github.event_name == 'push'
-
-    - name: Upload app source
-
-      uses: actions/upload-artifact@v4    outputs:
-
-      with:      image-tag: ${{ steps.meta.outputs.tags }}
-
-        name: app-source
-
-        path: app/    steps:
-
-      - name: Checkout code
-
-  #############################################        uses: actions/checkout@v4
-
-  # Job 2: Docker Build and Push
-
-  #############################################      - name: Set up Docker Buildx
-
-  docker-build-push:        uses: docker/setup-buildx-action@v3
-
-    runs-on: ubuntu-latest
-
-    name: Docker Build and Push      - name: Authenticate to Google Cloud
-
-    needs: build-and-test        uses: google-github-actions/auth@v1
-
-    if: github.ref == 'refs/heads/main'        with:
-
-              credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-    steps:
-
-    - name: Download app source      - name: Configure Docker for GCP
-
-      uses: actions/download-artifact@v4        run: |
-
-      with:          gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
-
-        name: app-source
-
-        path: ./app      - name: Extract metadata for Docker
-
-                id: meta
-
-    - name: Set up Google Cloud SDK        uses: docker/metadata-action@v5
-
-      uses: google-github-actions/setup-gcloud@v2        with:
-
-      with:          images: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/yappa-docker-repo/${{ env.APP_NAME }}
-
-        service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}          tags: |
-
-        project_id: ${{ env.GCP_PROJECT_ID }}            type=ref,event=branch
-
-                    type=ref,event=pr
-
-    - name: Configure Docker for Artifact Registry            type=semver,pattern={{version}}
-
-      run: gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY_REGION }}-docker.pkg.dev            type=semver,pattern={{major}}.{{minor}}
-
-                  type=sha,prefix={{branch}}-
-
-    - name: Build Docker image            type=raw,value=latest,enable={{is_default_branch}}
-
+    - name: Compile Spring Boot
       run: |
-
-        cd app      - name: Build and push Docker image
-
-        docker build -t ${{ env.ARTIFACT_REGISTRY_URL }}/${{ env.SERVICE_NAME }}:${{ github.run_number }} .        uses: docker/build-push-action@v5
-
-        docker build -t ${{ env.ARTIFACT_REGISTRY_URL }}/${{ env.SERVICE_NAME }}:latest .        with:
-
-                  context: ./app
-
-    - name: Push to Artifact Registry          file: ./app/Dockerfile
-
-      run: |          push: true
-
-        docker push ${{ env.ARTIFACT_REGISTRY_URL }}/${{ env.SERVICE_NAME }}:${{ github.run_number }}          tags: ${{ steps.meta.outputs.tags }}
-
-        docker push ${{ env.ARTIFACT_REGISTRY_URL }}/${{ env.SERVICE_NAME }}:latest          labels: ${{ steps.meta.outputs.labels }}
-
-          cache-from: type=gha
-
-  #############################################          cache-to: type=gha,mode=max
-
-  # Job 3: Deploy to Cloud Run
-
-  #############################################  # Job 3: Security Scan
-
-  deploy-cloud-run:  security-scan:
-
-    runs-on: ubuntu-latest    name: Security Scan
-
-    name: Deploy to Cloud Run    runs-on: ubuntu-latest
-
-    needs: docker-build-push    needs: build
-
-    if: github.ref == 'refs/heads/main'    if: github.event_name == 'push'
-
-    environment: dev
-
-        steps:
-
-    steps:      - name: Checkout code
-
-    - name: Checkout code        uses: actions/checkout@v4
-
-      uses: actions/checkout@v4
-
-            - name: Authenticate to Google Cloud
-
-    - name: Set up Google Cloud SDK        uses: google-github-actions/auth@v1
-
-      uses: google-github-actions/setup-gcloud@v2        with:
-
-      with:          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-        service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-
-        project_id: ${{ env.GCP_PROJECT_ID }}      - name: Configure Docker for GCP
-
-                run: |
-
-    - name: Deploy to Cloud Run          gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
-
+        cd app
+        mvn clean compile
+        
+    - name: Run tests
       run: |
-
-        gcloud run deploy ${{ env.SERVICE_NAME }} \      - name: Run Trivy vulnerability scanner
-
-          --image=${{ env.ARTIFACT_REGISTRY_URL }}/${{ env.SERVICE_NAME }}:${{ github.run_number }} \        uses: aquasecurity/trivy-action@master
-
-          --region=${{ env.CLOUD_RUN_REGION }} \        with:
-
-          --platform=managed \          image-ref: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/yappa-docker-repo/${{ env.APP_NAME }}:${{ github.sha }}
-
-          --allow-unauthenticated \          format: "sarif"
-
-          --memory=1Gi \          output: "trivy-results.sarif"
-
-          --cpu=1 \          severity: "CRITICAL,HIGH"
-
-          --max-instances=10 \
-
-          --min-instances=1 \      - name: Upload Trivy results to GitHub Security
-
-          --port=8080 \        uses: github/codeql-action/upload-sarif@v2
-
-          --set-env-vars="SPRING_PROFILES_ACTIVE=dev,ENVIRONMENT=dev,GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},CLOUD_SQL_INSTANCE_IP=10.2.0.3" \        if: always()
-
-          --vpc-connector=projects/${{ env.GCP_PROJECT_ID }}/locations/${{ env.CLOUD_RUN_REGION }}/connectors/yappa-vpc-connector \        with:
-
-          --vpc-egress=private-ranges-only          sarif_file: "trivy-results.sarif"
-
-          
-
-    - name: Verify deployment  # Job 4: Deploy to GKE
-
-      run: |  deploy:
-
-        SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.CLOUD_RUN_REGION }} --format='value(status.url)')    name: Deploy to GKE
-
-        echo "Service deployed at: $SERVICE_URL"    runs-on: ubuntu-latest
-
-            needs: [build, security-scan]
-
-        # Health check    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-        sleep 30
-
-        curl -f "$SERVICE_URL/" || echo "Root endpoint failed"    steps:
-
-        curl -f "$SERVICE_URL/actuator/health" || echo "Health endpoint failed"      - name: Checkout code
-
-        curl -f "$SERVICE_URL/api/info" || echo "Info endpoint failed"        uses: actions/checkout@v4
-
-
-
-  #############################################      - name: Authenticate to Google Cloud
-
-  # Job 4: Terraform Plan (always)        uses: google-github-actions/auth@v1
-
-  #############################################        with:
-
-  terraform-plan:          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-    runs-on: ubuntu-latest
-
-    name: Terraform Plan      - name: Set up Cloud SDK
-
-            uses: google-github-actions/setup-gcloud@v1
-
-    steps:
-
-    - name: Checkout code      - name: Install gke-gcloud-auth-plugin
-
-      uses: actions/checkout@v4        run: |
-
-                gcloud components install gke-gcloud-auth-plugin
-
-    - name: Set up Terraform
-
-      uses: hashicorp/setup-terraform@v3      - name: Get GKE credentials
-
-      with:        run: |
-
-        terraform_version: 1.6.0          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
-
-                    --region=${{ env.GCP_REGION }} \
-
-    - name: Set up Google Cloud SDK            --project=${{ secrets.GCP_PROJECT_ID }}
-
-      uses: google-github-actions/setup-gcloud@v2
-
-      with:      - name: Update Kubernetes deployment image
-
-        service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}        run: |
-
-        project_id: ${{ env.GCP_PROJECT_ID }}          # Actualizar la imagen en el deployment
-
-                  kubectl set image deployment/${{ env.APP_NAME }} \
-
-    - name: Terraform Init and Plan            ${{ env.APP_NAME }}=${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/yappa-docker-repo/${{ env.APP_NAME }}:${{ github.sha }} \
-
-      run: |            -n ${{ env.NAMESPACE }}
-
-        cd terraform
-
-        terraform init      - name: Wait for rollout to complete
-
-        terraform validate        run: |
-
-        terraform plan -var="project_id=${{ env.GCP_PROJECT_ID }}" -out=tfplan          kubectl rollout status deployment/${{ env.APP_NAME }} \
-
-                    -n ${{ env.NAMESPACE }} \
-
-    - name: Upload Terraform Plan            --timeout=5m
-
+        cd app
+        mvn test
+        
+    - name: Package application
+      run: |
+        cd app
+        mvn package -DskipTests
+        
+    - name: Upload JAR artifact
       uses: actions/upload-artifact@v4
+      with:
+        name: spring-boot-jar
+        path: app/target/*.jar
+        
+    - name: Upload app source
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-source
+        path: app/
 
-      with:      - name: Verify deployment
-
-        name: terraform-plan        run: |
-
-        path: terraform/tfplan          kubectl get pods -n ${{ env.NAMESPACE }}
-
-          kubectl get svc -n ${{ env.NAMESPACE }}
-
-  #############################################
-
-  # Job 5: Terraform Apply (only on main)      - name: Run smoke tests
-
-  #############################################        run: |
-
-  terraform-apply:          # Obtener la IP del servicio
-
-    runs-on: ubuntu-latest          INGRESS_IP=$(kubectl get ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}')
-
-    name: Terraform Apply
-
-    needs: terraform-plan          if [ -z "$INGRESS_IP" ]; then
-
-    if: github.ref == 'refs/heads/main'            echo "Warning: Ingress IP not ready yet, using service IP instead"
-
-                SERVICE_IP=$(kubectl get svc ${{ env.APP_NAME }}-service -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-
-    steps:            INGRESS_IP=${SERVICE_IP:-"localhost"}
-
-    - name: Checkout code          fi
-
-      uses: actions/checkout@v4
-
-                echo "Testing endpoint: http://${INGRESS_IP}"
-
-    - name: Set up Terraform
-
-      uses: hashicorp/setup-terraform@v3          # Health check (Spring Boot Actuator)
-
-      with:          curl -f http://${INGRESS_IP}/actuator/health || exit 1
-
-        terraform_version: 1.6.0
-
-                  # Liveness check
-
-    - name: Download Terraform Plan          curl -f http://${INGRESS_IP}/actuator/health/liveness || exit 1
-
-      uses: actions/download-artifact@v4
-
-      with:          # Readiness check
-
-        name: terraform-plan          curl -f http://${INGRESS_IP}/actuator/health/readiness || exit 1
-
-        path: ./terraform
-
-                  echo "Smoke tests passed!"
-
-    - name: Set up Google Cloud SDK
-
-      uses: google-github-actions/setup-gcloud@v2      - name: Rollback on failure
-
-      with:        if: failure()
-
-        service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}        run: |
-
-        project_id: ${{ env.GCP_PROJECT_ID }}          echo "Deployment failed, rolling back..."
-
-                  kubectl rollout undo deployment/${{ env.APP_NAME }} -n ${{ env.NAMESPACE }}
-
-    - name: Terraform Apply          kubectl rollout status deployment/${{ env.APP_NAME }} -n ${{ env.NAMESPACE }}
-
-      run: |
-
-        cd terraform  # Job 5: Notificaciones
-
-        terraform init  notify:
-
-        terraform apply tfplan    name: Send Notifications
+  docker-build-push:
     runs-on: ubuntu-latest
-    needs: [deploy]
-    if: always()
-
+    name: Docker Build and Push
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
+    
     steps:
-      - name: Notify success
-        if: needs.deploy.result == 'success'
-        run: |
-          echo "✅ Deployment successful!"
-          # Aquí puedes agregar notificaciones a Slack, Discord, etc.
+    - name: Download app source
+      uses: actions/download-artifact@v4
+      with:
+        name: app-source
+        path: ./app
+        
+    - name: Set up Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+        project_id: ${{ env.GCP_PROJECT_ID }}
+        
+    - name: Configure Docker for Artifact Registry
+      run: gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY_REGION }}-docker.pkg.dev
+      
+    - name: Build Docker image
+      run: |
+        cd app
+        docker build -t ${{ env.ARTIFACT_REGISTRY_URL }}/${{ env.SERVICE_NAME }}:${{ github.run_number }} .
+        docker build -t ${{ env.ARTIFACT_REGISTRY_URL }}/${{ env.SERVICE_NAME }}:latest .
+        
+    - name: Push to Artifact Registry
+      run: |
+        docker push ${{ env.ARTIFACT_REGISTRY_URL }}/${{ env.SERVICE_NAME }}:${{ github.run_number }}
+        docker push ${{ env.ARTIFACT_REGISTRY_URL }}/${{ env.SERVICE_NAME }}:latest
 
-      - name: Notify failure
-        if: needs.deploy.result == 'failure'
-        run: |
-          echo "❌ Deployment failed!"
-          # Aquí puedes agregar notificaciones a Slack, Discord, etc.
+  deploy-cloud-run:
+    runs-on: ubuntu-latest
+    name: Deploy to Cloud Run
+    needs: docker-build-push
+    if: github.ref == 'refs/heads/main'
+    environment: dev
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+        project_id: ${{ env.GCP_PROJECT_ID }}
+        
+    - name: Deploy to Cloud Run
+      run: |
+        gcloud run deploy ${{ env.SERVICE_NAME }} \
+          --image=${{ env.ARTIFACT_REGISTRY_URL }}/${{ env.SERVICE_NAME }}:${{ github.run_number }} \
+          --region=${{ env.CLOUD_RUN_REGION }} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --memory=1Gi \
+          --cpu=1 \
+          --max-instances=10 \
+          --min-instances=1 \
+          --port=8080 \
+          --set-env-vars="SPRING_PROFILES_ACTIVE=dev,ENVIRONMENT=dev,GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},CLOUD_SQL_INSTANCE_IP=10.2.0.3" \
+          --vpc-connector=projects/${{ env.GCP_PROJECT_ID }}/locations/${{ env.CLOUD_RUN_REGION }}/connectors/yappa-vpc-connector \
+          --vpc-egress=private-ranges-only
+          
+    - name: Verify deployment
+      run: |
+        SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.CLOUD_RUN_REGION }} --format='value(status.url)')
+        echo "Service deployed at: $SERVICE_URL"
+        
+        sleep 30
+        curl -f "$SERVICE_URL/" || echo "Root endpoint failed"
+        curl -f "$SERVICE_URL/actuator/health" || echo "Health endpoint failed"
+        curl -f "$SERVICE_URL/api/info" || echo "Info endpoint failed"
+
+  terraform-plan:
+    runs-on: ubuntu-latest
+    name: Terraform Plan
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform-version: 1.6.0
+        
+    - name: Set up Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+        project_id: ${{ env.GCP_PROJECT_ID }}
+        
+    - name: Terraform Init and Plan
+      run: |
+        cd terraform
+        terraform init
+        terraform validate
+        terraform plan -var="project_id=${{ env.GCP_PROJECT_ID }}" -out=tfplan
+        
+    - name: Upload Terraform Plan
+      uses: actions/upload-artifact@v4
+      with:
+        name: terraform-plan
+        path: terraform/tfplan
+
+  terraform-apply:
+    runs-on: ubuntu-latest
+    name: Terraform Apply
+    needs: terraform-plan
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform-version: 1.6.0
+        
+    - name: Download Terraform Plan
+      uses: actions/download-artifact@v4
+      with:
+        name: terraform-plan
+        path: ./terraform
+        
+    - name: Set up Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+        project_id: ${{ env.GCP_PROJECT_ID }}
+        
+    - name: Terraform Apply
+      run: |
+        cd terraform
+        terraform init
+        terraform apply tfplan
