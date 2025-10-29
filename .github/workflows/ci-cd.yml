@@ -155,6 +155,33 @@ jobs:
           fi
           echo ""
 
+          echo "🔍 Paso 2b: Verificando si VPN Gateway ya existe..."
+          # Verificar si VPN Gateway existe en GCP
+          if gcloud compute target-vpn-gateways describe yappa-vpn-gateway --region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
+            echo "✅ VPN Gateway existe en GCP"
+            
+            # Verificar si ya está en el state
+            if ! terraform state show google_compute_vpn_gateway.vpn_gateway >/dev/null 2>&1; then
+              echo "📥 Importando VPN Gateway al Terraform state..."
+              terraform import \
+                -var="project_id=$PROJECT_ID" \
+                -var="region=$REGION" \
+                -var="environment=dev" \
+                -var="db_password=${{ secrets.DB_PASSWORD }}" \
+                -var="storage_bucket_name=$BUCKET_NAME" \
+                -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
+                -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
+                google_compute_vpn_gateway.vpn_gateway \
+                $PROJECT_ID/$REGION/yappa-vpn-gateway
+              echo "✅ VPN Gateway importado correctamente"
+            else
+              echo "✅ VPN Gateway ya está en el state"
+            fi
+          else
+            echo "ℹ️ VPN Gateway no existe, Terraform lo creará"
+          fi
+          echo ""
+
           echo "✅ Paso 3: Validando configuración de Terraform..."
           terraform validate
           echo "✅ Validación completada"
