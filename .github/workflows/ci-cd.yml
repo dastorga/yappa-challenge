@@ -191,19 +191,12 @@ jobs:
             -var="db_password=${{ secrets.DB_PASSWORD }}" \
             -var="storage_bucket_name=${{ secrets.STORAGE_BUCKET_NAME }}" \
             -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
-            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
-            -out=tfplan
-
-      - name: Upload Terraform Plan
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-plan
-          path: terraform/tfplan
+            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}"
 
   terraform-apply:
     runs-on: ubuntu-latest
     name: Terraform Apply
-    needs: terraform-plan
+    needs: [build, deploy-cloud-run]
     if: github.ref == 'refs/heads/main'
     environment: dev
 
@@ -216,12 +209,6 @@ jobs:
         with:
           terraform-version: 1.6.0
 
-      - name: Download Terraform Plan
-        uses: actions/download-artifact@v4
-        with:
-          name: terraform-plan
-          path: ./terraform
-
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
@@ -232,6 +219,8 @@ jobs:
         run: |
           echo "$GCP_SERVICE_ACCOUNT_KEY" | base64 -d > /tmp/gcp-key.json
           export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
+          gcloud auth activate-service-account --key-file=/tmp/gcp-key.json
+          gcloud config set project ${{ secrets.PROJECT_ID }}
         env:
           GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
 
