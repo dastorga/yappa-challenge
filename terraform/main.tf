@@ -5,6 +5,10 @@ terraform {
     google = {
       source = "hashicorp/google"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
   }
 
   backend "gcs" {

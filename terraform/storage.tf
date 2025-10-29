@@ -1,8 +1,15 @@
 # Bucket de Cloud Storage para artefactos, logs y archivos temporales (v3.22.0)
 resource "google_storage_bucket" "bucket" {
-  name          = var.storage_bucket_name
+  name          = local.storage_bucket_name
   location      = var.storage_location
   force_destroy = false
+
+  lifecycle {
+    prevent_destroy = true # Protege contra eliminación accidental
+    ignore_changes = [
+      name, # Ignorar cambios en el nombre después de la creación
+    ]
+  }
 
   # Configuración de versionado
   versioning {
@@ -49,9 +56,16 @@ resource "google_storage_bucket" "bucket" {
 
 # Bucket separado para logs de acceso
 resource "google_storage_bucket" "logs_bucket" {
-  name          = "${var.storage_bucket_name}-logs"
+  name          = local.logs_bucket_name
   location      = var.storage_location
   force_destroy = true
+
+  lifecycle {
+    prevent_destroy = true # Protege contra eliminación accidental
+    ignore_changes = [
+      name, # Ignorar cambios en el nombre después de la creación
+    ]
+  }
 
   # Política de retención para logs
   lifecycle_rule {
@@ -75,7 +89,7 @@ resource "google_storage_bucket_object" "folders" {
   for_each = toset([
     "uploads/",
     "temp/",
-    "exports/", 
+    "exports/",
     "backups/",
     "app-logs/"
   ])

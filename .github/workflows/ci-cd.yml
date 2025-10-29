@@ -1,4 +1,4 @@
-name: Yappa Challenge DevOps CI/CD - SIMPLIFIED
+name: Yappa Challenge DevOps CI/CD - Optimized
 
 on:
   push:
@@ -13,6 +13,7 @@ on:
 env:
   GCP_PROJECT_ID: yappa-challenge-devops
   SERVICE_NAME: yappa-spring-boot-service
+  TF_STATE_BUCKET: yappa-challenge-tfstate
 
 jobs:
   # 1. BUILD - Compilar aplicación Spring Boot
@@ -86,61 +87,85 @@ jobs:
         env:
           GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
 
-      - name: Terraform Init and Apply
+      - name: Verify or Create Terraform State Bucket
+        run: |
+          echo "🗄️ Verificando bucket de Terraform state..."
+
+          if gcloud storage buckets describe gs://${{ env.TF_STATE_BUCKET }} --project=${{ secrets.PROJECT_ID }} >/dev/null 2>&1; then
+            echo "✅ Bucket de state existe: gs://${{ env.TF_STATE_BUCKET }}"
+          else
+            echo "🆕 Creando bucket de Terraform state..."
+            gcloud storage buckets create gs://${{ env.TF_STATE_BUCKET }} \
+              --project=${{ secrets.PROJECT_ID }} \
+              --location=southamerica-east1 \
+              --uniform-bucket-level-access
+            
+            echo "🔒 Habilitando versionado en el bucket..."
+            gcloud storage buckets update gs://${{ env.TF_STATE_BUCKET }} --versioning
+            
+            echo "✅ Bucket de state creado y configurado"
+          fi
+
+      - name: Terraform Init, Refresh and Apply
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
         run: |
           cd terraform
-
-          echo "🚀 Initializing Terraform..."
-          terraform init
 
           # Set variables
           PROJECT_ID="${{ secrets.PROJECT_ID }}"
           REGION="${{ secrets.REGION }}"
           BUCKET_NAME="${{ secrets.STORAGE_BUCKET_NAME }}"
 
-          echo "🔍 Checking for existing resources and importing if needed..."
+          echo ""
+          echo "═══════════════════════════════════════════════════════════════"
+          echo "🚀 TERRAFORM DEPLOYMENT - PRIMERA O SIGUIENTES EJECUCIONES"
+          echo "═══════════════════════════════════════════════════════════════"
+          echo ""
 
-          # Import VPC if exists
-          if gcloud compute networks describe yappa-vpc --project=$PROJECT_ID >/dev/null 2>&1; then
-            echo "📥 Importing existing VPC..."
-            terraform import -var="project_id=$PROJECT_ID" -var="region=$REGION" -var="environment=dev" -var="db_password=${{ secrets.DB_PASSWORD }}" -var="storage_bucket_name=$BUCKET_NAME" -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" google_compute_network.vpc "projects/$PROJECT_ID/global/networks/yappa-vpc" 2>/dev/null || true
-          fi
+          echo "📦 Paso 1: Inicializando Terraform con backend en GCS..."
+          terraform init
+          echo "✅ Inicialización completada"
+          echo ""
 
-          # Import Service Accounts if exist
-          for sa in cloud-run-sa yappa-admin-sa yappa-backup-sa vpn-test-sa; do
-            if gcloud iam service-accounts describe $sa@$PROJECT_ID.iam.gserviceaccount.com --project=$PROJECT_ID >/dev/null 2>&1; then
-              echo "� Importing existing service account: $sa..."
-              SA_RESOURCE=$(echo $sa | sed 's/-/_/g')
-              terraform import -var="project_id=$PROJECT_ID" -var="region=$REGION" -var="environment=dev" -var="db_password=${{ secrets.DB_PASSWORD }}" -var="storage_bucket_name=$BUCKET_NAME" -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" google_service_account.$SA_RESOURCE "projects/$PROJECT_ID/serviceAccounts/$sa@$PROJECT_ID.iam.gserviceaccount.com" 2>/dev/null || true
-            fi
-          done
-
-          # Import Storage Buckets if exist
-          if gsutil ls gs://$BUCKET_NAME >/dev/null 2>&1; then
-            echo "📥 Importing existing bucket: $BUCKET_NAME..."
-            terraform import -var="project_id=$PROJECT_ID" -var="region=$REGION" -var="environment=dev" -var="db_password=${{ secrets.DB_PASSWORD }}" -var="storage_bucket_name=$BUCKET_NAME" -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" google_storage_bucket.bucket "$BUCKET_NAME" 2>/dev/null || true
-          fi
-
-          if gsutil ls gs://$BUCKET_NAME-logs >/dev/null 2>&1; then
-            echo "📥 Importing existing logs bucket..."
-            terraform import -var="project_id=$PROJECT_ID" -var="region=$REGION" -var="environment=dev" -var="db_password=${{ secrets.DB_PASSWORD }}" -var="storage_bucket_name=$BUCKET_NAME" -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" google_storage_bucket.logs_bucket "$BUCKET_NAME-logs" 2>/dev/null || true
-          fi
-
-          # Import VPN Gateway IP if exists
-          if gcloud compute addresses describe vpn-gateway-ip --region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
-            echo "📥 Importing existing VPN Gateway IP..."
-            terraform import -var="project_id=$PROJECT_ID" -var="region=$REGION" -var="environment=dev" -var="db_password=${{ secrets.DB_PASSWORD }}" -var="storage_bucket_name=$BUCKET_NAME" -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" google_compute_address.vpn_gateway_ip "projects/$PROJECT_ID/regions/$REGION/addresses/vpn-gateway-ip" 2>/dev/null || true
-          fi
-
-          echo "📊 Current Terraform state:"
-          terraform state list || echo "No resources in state yet"
-
-          echo "✅ Validating configuration..."
+          echo "✅ Paso 2: Validando configuración de Terraform..."
           terraform validate
+          echo "✅ Validación completada"
+          echo ""
 
-          echo "📋 Planning infrastructure..."
+          echo "🔄 Paso 3: Sincronizando state con infraestructura real en GCP..."
+          echo "   (terraform refresh detecta recursos existentes)"
+          terraform refresh \
+            -var="project_id=$PROJECT_ID" \
+            -var="region=$REGION" \
+            -var="environment=dev" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="storage_bucket_name=$BUCKET_NAME" \
+            -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
+            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" || echo "⚠️ Refresh completado con advertencias (normal en primera ejecución)"
+          echo ""
+
+          echo "📊 Paso 4: Recursos actualmente en el state:"
+          RESOURCE_COUNT=$(terraform state list 2>/dev/null | wc -l)
+          if [ "$RESOURCE_COUNT" -eq "0" ]; then
+            echo "   📭 No hay recursos en el state (PRIMERA EJECUCIÓN)"
+            echo "   ➡️  Terraform creará TODA la infraestructura"
+          else
+            echo "   ✅ State contiene $RESOURCE_COUNT recursos"
+            terraform state list
+            echo "   ➡️  Terraform solo creará recursos NUEVOS o actualizará MODIFICADOS"
+          fi
+          echo ""
+
+          echo "📋 Paso 5: Generando plan de ejecución..."
+          echo "   ═══════════════════════════════════════════"
+          echo "   (+) = Recursos NUEVOS que serán CREADOS"
+          echo "   (~) = Recursos EXISTENTES que serán ACTUALIZADOS"
+          echo "   (-) = Recursos que serán ELIMINADOS"
+          echo "   (nothing) = Sin cambios detectados"
+          echo "   ═══════════════════════════════════════════"
+          echo ""
+
           terraform plan \
             -var="project_id=$PROJECT_ID" \
             -var="region=$REGION" \
@@ -148,25 +173,34 @@ jobs:
             -var="db_password=${{ secrets.DB_PASSWORD }}" \
             -var="storage_bucket_name=$BUCKET_NAME" \
             -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
-            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}"
+            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
+            -out=tfplan
+          echo ""
 
-          echo "🏗️ Applying infrastructure..."
-          terraform apply -auto-approve \
-            -var="project_id=$PROJECT_ID" \
-            -var="region=$REGION" \
-            -var="environment=dev" \
-            -var="db_password=${{ secrets.DB_PASSWORD }}" \
-            -var="storage_bucket_name=$BUCKET_NAME" \
-            -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
-            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}"
+          echo "🏗️ Paso 6: Aplicando cambios de infraestructura..."
+          echo "   ═══════════════════════════════════════════"
+          echo "   ✅ Solo creará recursos NUEVOS"
+          echo "   ✅ Solo actualizará recursos MODIFICADOS"
+          echo "   ❌ NO recreará recursos existentes"
+          echo "      (protegidos con lifecycle blocks)"
+          echo "   ═══════════════════════════════════════════"
+          echo ""
+
+          terraform apply -auto-approve tfplan
+
+          echo ""
+          echo "═══════════════════════════════════════════════════════════════"
+          echo "✅ TERRAFORM DEPLOYMENT COMPLETADO"
+          echo "═══════════════════════════════════════════════════════════════"
+          echo ""
 
       - name: Terraform Outputs
         run: |
           cd terraform
           echo "📊 Infrastructure Outputs:"
-          echo "=========================="
+          echo "═══════════════════════════════════════════════════════════════"
           terraform output
-          echo "=========================="
+          echo "═══════════════════════════════════════════════════════════════"
           echo "✅ Infrastructure deployment completed successfully!"
 
   # 3. DOCKER - Construir y subir imagen

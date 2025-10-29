@@ -1,15 +1,22 @@
 # VPC personalizada
 resource "google_compute_network" "vpc" {
-  name                    = var.vpc_name
+  name                    = "yappa-vpc"
   auto_create_subnetworks = false
   description             = "VPC personalizada para el proyecto Yappa"
+
+  lifecycle {
+    prevent_destroy = true # Protege la VPC contra eliminación accidental
+    ignore_changes = [
+      name, # Ignorar cambios en el nombre después de la creación
+    ]
+  }
 
   depends_on = [google_project_service.compute]
 }
 
 # Subnet privada en southamerica-east1
 resource "google_compute_subnetwork" "private_subnet" {
-  name          = var.private_subnet_name
+  name          = "yappa-private-subnet"
   ip_cidr_range = var.private_subnet_cidr
   region        = var.region
   network       = google_compute_network.vpc.name
@@ -18,6 +25,13 @@ resource "google_compute_subnetwork" "private_subnet" {
 
   # Habilitar Private Google Access para acceso a APIs sin IP pública
   private_ip_google_access = true
+
+  lifecycle {
+    prevent_destroy = true # Protege la subnet contra eliminación accidental
+    ignore_changes = [
+      name, # Ignorar cambios en el nombre después de la creación
+    ]
+  }
 }
 
 # Reserva de IP para Cloud SQL

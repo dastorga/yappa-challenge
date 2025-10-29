@@ -1,8 +1,15 @@
 # Instancia Cloud SQL PostgreSQL
 resource "google_sql_database_instance" "postgres_instance" {
-  name             = var.db_instance_name
+  name             = local.db_instance_name
   database_version = var.db_version
   region           = var.region
+
+  lifecycle {
+    prevent_destroy = true # Protege contra eliminación accidental de la BD
+    ignore_changes = [
+      name, # Ignorar cambios en el nombre después de la creación
+    ]
+  }
 
   settings {
     tier = var.db_tier

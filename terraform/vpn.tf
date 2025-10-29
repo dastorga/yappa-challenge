@@ -2,24 +2,44 @@
 resource "google_compute_address" "vpn_gateway_ip" {
   name   = "vpn-gateway-ip"
   region = var.region
+
+  lifecycle {
+    prevent_destroy = true # Protege la IP estática contra eliminación accidental
+    ignore_changes = [
+      name, # Ignorar cambios en el nombre después de la creación
+    ]
+  }
 }
 
 # VPN Gateway
 resource "google_compute_vpn_gateway" "vpn_gateway" {
-  name    = var.vpn_gateway_name
+  name    = "yappa-vpn-gateway"
   network = google_compute_network.vpc.name
   region  = var.region
+
+  lifecycle {
+    prevent_destroy = true # Protege el VPN Gateway contra eliminación accidental
+    ignore_changes = [
+      name, # Ignorar cambios en el nombre después de la creación
+    ]
+  }
 }
 
 # Túnel VPN hacia red on-premises (simulada)
 resource "google_compute_vpn_tunnel" "tunnel_onprem" {
-  name               = "tunnel-to-onprem"
+  name               = "yappa-vpn-tunnel"
   peer_ip            = var.peer_external_ip
   shared_secret      = var.vpn_shared_secret
   target_vpn_gateway = google_compute_vpn_gateway.vpn_gateway.name
 
   local_traffic_selector  = [var.private_subnet_cidr]
   remote_traffic_selector = [var.on_prem_cidr]
+
+  lifecycle {
+    ignore_changes = [
+      name, # Ignorar cambios en el nombre después de la creación
+    ]
+  }
 
   depends_on = [
     google_compute_forwarding_rule.fr_esp,
@@ -133,4 +153,10 @@ resource "google_compute_instance" "vpn_test_vm" {
 resource "google_service_account" "vpn_test_sa" {
   account_id   = "vpn-test-sa"
   display_name = "Service Account para VM de prueba VPN"
+
+  lifecycle {
+    ignore_changes = [
+      account_id, # Ignorar cambios en el account_id después de la creación
+    ]
+  }
 }

@@ -6,8 +6,7 @@ resource "google_app_engine_application" "app" {
   location_id = var.firestore_location
 
   depends_on = [
-    google_project_service.firestore,
-    google_project_service.appengine
+    google_project_service.firestore
   ]
 }
 

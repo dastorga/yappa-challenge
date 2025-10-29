@@ -3,6 +3,12 @@ resource "google_service_account" "cloud_run_sa" {
   account_id   = "cloud-run-sa"
   display_name = "Service Account para Cloud Run"
   description  = "Service Account utilizado por el servicio Cloud Run de Yappa"
+
+  lifecycle {
+    ignore_changes = [
+      account_id, # Ignorar cambios en el ID después de la creación
+    ]
+  }
 }
 
 # Permisos para Cloud Run - acceso a Cloud SQL
@@ -55,9 +61,15 @@ resource "google_project_iam_member" "cloud_run_trace_agent" {
 
 # Service Account para administración del proyecto (opcional)
 resource "google_service_account" "admin_sa" {
-  account_id   = "yappa-admin-sa"
+  account_id   = "admin-sa"
   display_name = "Service Account Administrativo Yappa"
   description  = "Service Account para tareas administrativas del proyecto"
+
+  lifecycle {
+    ignore_changes = [
+      account_id, # Ignorar cambios en el ID después de la creación
+    ]
+  }
 }
 
 # Permisos administrativos limitados
@@ -69,9 +81,15 @@ resource "google_project_iam_member" "admin_editor" {
 
 # Service Account para backups y mantenimiento
 resource "google_service_account" "backup_sa" {
-  account_id   = "yappa-backup-sa"
+  account_id   = "backup-sa"
   display_name = "Service Account para Backups"
   description  = "Service Account para operaciones de backup y mantenimiento"
+
+  lifecycle {
+    ignore_changes = [
+      account_id, # Ignorar cambios en el ID después de la creación
+    ]
+  }
 }
 
 # Permisos específicos para backups
