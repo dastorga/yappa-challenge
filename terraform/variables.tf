@@ -70,6 +70,7 @@ variable "db_password" {
   description = "Contraseña del usuario de la base de datos"
   type        = string
   sensitive   = true
+  default     = "YappaSecure2024!"
 }
 
 # Cloud Run Variables

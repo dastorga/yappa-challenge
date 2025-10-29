@@ -156,7 +156,7 @@ jobs:
           cd terraform
           terraform init
           terraform validate
-          terraform plan -var="project_id=${{ env.GCP_PROJECT_ID }}" -out=tfplan
+          terraform plan -var-file="terraform.tfvars" -out=tfplan
 
       - name: Upload Terraform Plan
         uses: actions/upload-artifact@v4
