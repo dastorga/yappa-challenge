@@ -42,10 +42,11 @@ resource "google_project_service" "firestore" {
   disable_on_destroy = false
 }
 
-resource "google_project_service" "appengine" {
-  service            = "appengine.googleapis.com"
-  disable_on_destroy = false
-}
+# App Engine no es necesario para Firestore nativo moderno
+# resource "google_project_service" "appengine" {
+#   service            = "appengine.googleapis.com"
+#   disable_on_destroy = false
+# }
 
 resource "google_project_service" "storage" {
   service            = "storage.googleapis.com"
