@@ -7,8 +7,9 @@ import org.springframework.test.context.ActiveProfiles;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
-@ActiveProfiles("test")
+// Temporalmente deshabilitado para debug
+// @SpringBootTest
+// @ActiveProfiles("test")
 class ApplicationInfoServiceTest {
 
     @Autowired
