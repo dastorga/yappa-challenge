@@ -98,18 +98,11 @@ jobs:
         run: |
           cd terraform
           
-          echo "☁️ Initializing Terraform with GCS remote state..."
-          echo "📍 State bucket: yappa-terraform-state"
-          echo "📂 State prefix: terraform/state"
+          echo "☁️ Initializing Terraform with GCS backend safely..."
           
-          # Asegurar acceso al bucket de estado
-          gsutil ls gs://yappa-terraform-state/ >/dev/null 2>&1 || {
-            echo "🗄️ Creating Terraform state bucket..."
-            gsutil mb gs://yappa-terraform-state/
-            gsutil versioning set on gs://yappa-terraform-state/
-          }
+          # Usar script robusto para inicialización
+          ./init-terraform-backend.sh $PROJECT_ID $REGION
           
-          terraform init -reconfigure
           terraform validate
           
           echo "🔄 Refreshing state from GCS backend..."
