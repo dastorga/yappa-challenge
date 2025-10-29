@@ -129,10 +129,13 @@ stages:
               artifactName: "app-source"
               downloadPath: "$(System.DefaultWorkingDirectory)"
 
-          - task: GoogleCloudSdkTool@0
+          - script: |
+              # Install Google Cloud SDK
+              echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+              curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+              sudo apt-get update && sudo apt-get install google-cloud-cli
+              gcloud version
             displayName: "Install Google Cloud SDK"
-            inputs:
-              version: "latest"
 
           - script: |
               echo '$(GCP_SERVICE_ACCOUNT_KEY)' | base64 -d > gcp-key.json
@@ -177,10 +180,13 @@ stages:
                 - checkout: self
                   fetchDepth: 1
 
-                - task: GoogleCloudSdkTool@0
+                - script: |
+                    # Install Google Cloud SDK
+                    echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+                    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+                    sudo apt-get update && sudo apt-get install google-cloud-cli
+                    gcloud version
                   displayName: "Install Google Cloud SDK"
-                  inputs:
-                    version: "latest"
 
                 - script: |
                     echo '$(GCP_SERVICE_ACCOUNT_KEY)' | base64 -d > gcp-key.json
@@ -240,10 +246,13 @@ stages:
           - checkout: self
             fetchDepth: 1
 
-          - task: GoogleCloudSdkTool@0
+          - script: |
+              # Install Google Cloud SDK
+              echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+              curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+              sudo apt-get update && sudo apt-get install google-cloud-cli
+              gcloud version
             displayName: "Install Google Cloud SDK"
-            inputs:
-              version: "latest"
 
           - script: |
               # Install Terraform
@@ -296,10 +305,13 @@ stages:
               artifactName: "terraform-plan"
               downloadPath: "$(System.DefaultWorkingDirectory)"
 
-          - task: GoogleCloudSdkTool@0
+          - script: |
+              # Install Google Cloud SDK
+              echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+              curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+              sudo apt-get update && sudo apt-get install google-cloud-cli
+              gcloud version
             displayName: "Install Google Cloud SDK"
-            inputs:
-              version: "latest"
 
           - script: |
               # Install Terraform
