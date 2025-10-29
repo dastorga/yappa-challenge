@@ -116,7 +116,18 @@ jobs:
             -var="db_password=${{ secrets.DB_PASSWORD }}" \
             -var="storage_bucket_name=${{ secrets.STORAGE_BUCKET_NAME }}" \
             -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
-            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}"  # 3. DOCKER - Construir y subir imagen
+            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}"
+
+      - name: Terraform Outputs
+        run: |
+          cd terraform
+          echo "📊 Infrastructure Outputs:"
+          echo "=========================="
+          terraform output
+          echo "=========================="
+          echo "✅ Infrastructure deployment completed successfully!"
+
+  # 3. DOCKER - Construir y subir imagen
   docker-build-push:
     runs-on: ubuntu-latest
     name: Build and Push Docker Image
