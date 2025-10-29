@@ -1,4 +1,4 @@
-# Configuración de Terraform con backend local como fallback
+# Configuración de Terraform
 terraform {
   required_version = ">= 1.0"
 
@@ -8,8 +8,11 @@ terraform {
     }
   }
 
-  # Backend local como fallback si GCS no está disponible
-  # Para usar GCS: terraform init -backend-config="bucket=yappa-terraform-state" -backend-config="prefix=terraform/state"
+  # Backend para almacenar el estado (comentado temporalmente para evitar errores)
+  # backend "gcs" {
+  #   bucket = "yappa-terraform-state"
+  #   prefix = "terraform/state"
+  # }
 }
 
 # Provider de Google Cloud
