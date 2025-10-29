@@ -1,4 +1,4 @@
-name: Yappa Challenge DevOps CI/CD - ORDERED
+name: Yappa Challenge DevOps CI/CD
 
 on:
   push:
@@ -15,10 +15,9 @@ env:
   SERVICE_NAME: yappa-spring-boot-service
 
 jobs:
-  # 1. BUILD - Compilar aplicación Spring Boot
   build:
     runs-on: ubuntu-latest
-    name: Build Spring Boot Application
+    name: Maven Build and Package
 
     steps:
       - name: Checkout code
@@ -37,7 +36,7 @@ jobs:
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
 
-      - name: Build Spring Boot JAR
+      - name: Compile and Package Spring Boot
         run: |
           cd app
           mvn clean compile package -DskipTests
@@ -54,69 +53,10 @@ jobs:
           name: app-source
           path: app/
 
-  # 2. INFRASTRUCTURE - Crear toda la infraestructura con Terraform
-  infrastructure:
-    runs-on: ubuntu-latest
-    name: Deploy Infrastructure
-    needs: build
-    if: github.ref == 'refs/heads/main'
-    environment: dev
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.6.0
-
-      - name: Set up Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-          project_id: ${{ env.GCP_PROJECT_ID }}
-
-      - name: Set up GCP credentials
-        run: |
-          echo "$GCP_SERVICE_ACCOUNT_KEY" | base64 -d > /tmp/gcp-key.json
-          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
-          gcloud auth activate-service-account --key-file=/tmp/gcp-key.json
-          gcloud config set project ${{ secrets.PROJECT_ID }}
-        env:
-          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-
-      - name: Terraform Init & Handle Existing Resources
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
-          PROJECT_ID: ${{ secrets.PROJECT_ID }}
-          REGION: ${{ secrets.REGION }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          STORAGE_BUCKET_NAME: ${{ secrets.STORAGE_BUCKET_NAME }}
-          PEER_EXTERNAL_IP: ${{ secrets.PEER_EXTERNAL_IP }}
-          VPN_SHARED_SECRET: ${{ secrets.VPN_SHARED_SECRET }}
-        run: |
-          cd terraform
-          
-          echo "🔧 Initializing Terraform..."
-          terraform init
-          terraform validate
-          
-          echo "🚀 Deploying infrastructure with existing resources handling..."
-          ./handle-existing-resources.sh      - name: Verify Infrastructure
-        run: |
-          echo "✅ Infrastructure deployment completed"
-          echo "📊 Terraform state summary:"
-          cd terraform && terraform state list | wc -l
-          echo "🔗 VPC Connector created: yappa-vpc-connector"
-          echo "🐘 Cloud SQL instance ready"
-          echo "🗄️ Artifact Registry ready"
-
-  # 3. DOCKER - Construir y subir imagen (después de infraestructura)
   docker-build-push:
     runs-on: ubuntu-latest
-    name: Build and Push Docker Image
-    needs: infrastructure
+    name: Docker Build and Push
+    needs: terraform-apply
     if: github.ref == 'refs/heads/main'
     environment: dev
 
@@ -144,21 +84,17 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ secrets.REGION }}-docker.pkg.dev
 
-      - name: Build Docker images
+      - name: Build Docker image
         run: |
           cd app
-          echo "🔨 Building Docker image..."
           docker build -t ${{ secrets.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }} .
           docker build -t ${{ secrets.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:latest .
 
-      - name: Push images to Artifact Registry
+      - name: Push to Artifact Registry
         run: |
-          echo "📦 Pushing images to Artifact Registry..."
           docker push ${{ secrets.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }}
           docker push ${{ secrets.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:latest
-          echo "✅ Images pushed successfully"
 
-  # 4. DEPLOY - Desplegar aplicación en Cloud Run (al final)
   deploy-cloud-run:
     runs-on: ubuntu-latest
     name: Deploy to Cloud Run
@@ -167,6 +103,9 @@ jobs:
     environment: dev
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
@@ -184,7 +123,6 @@ jobs:
 
       - name: Deploy to Cloud Run
         run: |
-          echo "🚀 Deploying to Cloud Run..."
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image=${{ secrets.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }} \
             --region=${{ secrets.REGION }} \
@@ -199,19 +137,101 @@ jobs:
             --vpc-connector=projects/${{ env.GCP_PROJECT_ID }}/locations/${{ secrets.REGION }}/connectors/yappa-vpc-connector \
             --vpc-egress=private-ranges-only
 
-      - name: Verify deployment and test endpoints
+      - name: Verify deployment
         run: |
-          echo "🔍 Verifying deployment..."
           SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ secrets.REGION }} --format='value(status.url)')
-          echo "🌐 Service deployed at: $SERVICE_URL"
+          echo "Service deployed at: $SERVICE_URL"
 
-          echo "⏳ Waiting for service to be ready..."
           sleep 30
+          curl -f "$SERVICE_URL/" || echo "Root endpoint failed"
+          curl -f "$SERVICE_URL/actuator/health" || echo "Health endpoint failed"
+          curl -f "$SERVICE_URL/api/info" || echo "Info endpoint failed"
 
-          echo "🧪 Testing endpoints..."
-          curl -f "$SERVICE_URL/" && echo "✅ Root endpoint: OK" || echo "❌ Root endpoint: FAILED"
-          curl -f "$SERVICE_URL/actuator/health" && echo "✅ Health check: OK" || echo "❌ Health check: FAILED"
-          curl -f "$SERVICE_URL/api/info" && echo "✅ API info: OK" || echo "❌ API info: FAILED"
+  terraform-plan:
+    runs-on: ubuntu-latest
+    name: Terraform Plan
+    environment: dev
 
-          echo "🎉 Deployment completed successfully!"
-          echo "📱 Your app is live at: $SERVICE_URL"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform-version: 1.6.0
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Set up Terraform credentials
+        run: |
+          echo "$GCP_SERVICE_ACCOUNT_KEY" | base64 -d > /tmp/gcp-key.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
+        env:
+          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+      - name: Terraform Init and Plan
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
+        run: |
+          cd terraform
+          terraform init
+          terraform validate
+          terraform plan \
+            -var="project_id=${{ secrets.PROJECT_ID }}" \
+            -var="region=${{ secrets.REGION }}" \
+            -var="environment=dev" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="storage_bucket_name=${{ secrets.STORAGE_BUCKET_NAME }}" \
+            -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
+            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}"
+
+  terraform-apply:
+    runs-on: ubuntu-latest
+    name: Terraform Apply
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    environment: dev
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform-version: 1.6.0
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Set up Terraform credentials
+        run: |
+          echo "$GCP_SERVICE_ACCOUNT_KEY" | base64 -d > /tmp/gcp-key.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
+          gcloud auth activate-service-account --key-file=/tmp/gcp-key.json
+          gcloud config set project ${{ secrets.PROJECT_ID }}
+        env:
+          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+      - name: Terraform Apply
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
+        run: |
+          cd terraform
+          terraform init
+          terraform apply -auto-approve \
+            -var="project_id=${{ secrets.PROJECT_ID }}" \
+            -var="region=${{ secrets.REGION }}" \
+            -var="environment=dev" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="storage_bucket_name=${{ secrets.STORAGE_BUCKET_NAME }}" \
+            -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
+            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}"
