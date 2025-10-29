@@ -72,13 +72,13 @@ output "logs_bucket_name" {
 
 # Información de Firestore
 output "firestore_database_name" {
-  description = "Nombre de la aplicación App Engine (habilita Firestore)"
-  value       = google_app_engine_application.app.name
+  description = "Firestore habilitado via API (no requiere App Engine)"
+  value       = "${var.project_id}-firestore-native"
 }
 
 output "firestore_location" {
   description = "Ubicación de la base de datos Firestore"
-  value       = google_app_engine_application.app.location_id
+  value       = var.firestore_location
 }
 
 # Información de VPN
@@ -130,7 +130,7 @@ output "connection_instructions" {
     📊 Servicios creados:
     - Cloud Run: ${google_cloud_run_service.app.status[0].url}
     - Cloud SQL: ${google_sql_database_instance.postgres_instance.connection_name}
-    - Firestore: ${google_app_engine_application.app.name}
+    - Firestore: Habilitado via API nativa (sin App Engine)
     - Storage: gs://${google_storage_bucket.bucket.name}
     - VPN Gateway: ${google_compute_address.vpn_gateway_ip.address}
     
