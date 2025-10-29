@@ -86,7 +86,7 @@ jobs:
         env:
           GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
 
-      - name: Terraform Deploy with Smart Resource Handling
+      - name: Terraform Deploy with GCS Backend
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
           PROJECT_ID: ${{ secrets.PROJECT_ID }}
@@ -98,19 +98,32 @@ jobs:
         run: |
           cd terraform
           
-          echo "🔧 Initializing Terraform..."
-          terraform init
+          echo "☁️ Initializing Terraform with GCS remote state..."
+          echo "📍 State bucket: yappa-terraform-state"
+          echo "📂 State prefix: terraform/state"
+          
+          # Asegurar acceso al bucket de estado
+          gsutil ls gs://yappa-terraform-state/ >/dev/null 2>&1 || {
+            echo "🗄️ Creating Terraform state bucket..."
+            gsutil mb gs://yappa-terraform-state/
+            gsutil versioning set on gs://yappa-terraform-state/
+          }
+          
+          terraform init -reconfigure
           terraform validate
           
-          echo "� Refreshing state to sync with GCP reality..."
-          terraform apply -refresh-only -auto-approve \
+          echo "🔄 Refreshing state from GCS backend..."
+          terraform refresh \
             -var="project_id=$PROJECT_ID" \
             -var="region=$REGION" \
             -var="environment=dev" \
             -var="db_password=$DB_PASSWORD" \
             -var="storage_bucket_name=$STORAGE_BUCKET_NAME" \
             -var="peer_external_ip=$PEER_EXTERNAL_IP" \
-            -var="vpn_shared_secret=$VPN_SHARED_SECRET" || true
+            -var="vpn_shared_secret=$VPN_SHARED_SECRET"
+          
+          echo "📋 Checking current state..."
+          terraform state list | head -10
           
           echo "🚀 Applying infrastructure changes (handling existing resources)..."
           terraform apply -auto-approve \

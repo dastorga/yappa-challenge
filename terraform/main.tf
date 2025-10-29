@@ -9,10 +9,10 @@ terraform {
   }
 
   # Backend para almacenar el estado (opcional)
-  # backend "gcs" {
-  #   bucket = "yappa-terraform-state"
-  #   prefix = "terraform/state"
-  # }
+  backend "gcs" {
+    bucket = "yappa-terraform-state"
+    prefix = "terraform/state"
+  }
 }
 
 # Provider de Google Cloud
