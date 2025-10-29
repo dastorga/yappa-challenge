@@ -95,38 +95,42 @@ jobs:
           echo "🚀 Initializing Terraform..."
           terraform init
 
+          # Create an empty state file to ensure all commands use it
+          touch terraform.tfstate
+
           # Set variables
           PROJECT_ID="${{ secrets.PROJECT_ID }}"
           REGION="${{ secrets.REGION }}"
           BUCKET_NAME="${{ secrets.STORAGE_BUCKET_NAME }}"
+          STATE_FILE="-state=terraform.tfstate"
 
           echo "📥 Force importing existing resources to avoid 409 errors..."
 
           # Import all resources that commonly exist - ignore errors if not found
           echo "Importing VPC Network..."
-          terraform import google_compute_network.vpc "projects/$PROJECT_ID/global/networks/yappa-vpc" 2>/dev/null || echo "VPC not imported (may not exist)"
+          terraform import $STATE_FILE google_compute_network.vpc "projects/$PROJECT_ID/global/networks/yappa-vpc" 2>/dev/null || echo "VPC not imported (may not exist)"
 
           echo "Importing VPN Gateway IP..."
-          terraform import google_compute_address.vpn_gateway_ip "projects/$PROJECT_ID/regions/$REGION/addresses/vpn-gateway-ip" 2>/dev/null || echo "VPN IP not imported"
+          terraform import $STATE_FILE google_compute_address.vpn_gateway_ip "projects/$PROJECT_ID/regions/$REGION/addresses/vpn-gateway-ip" 2>/dev/null || echo "VPN IP not imported"
 
           echo "Importing Storage Buckets..."
-          terraform import google_storage_bucket.bucket "$BUCKET_NAME" 2>/dev/null || echo "Main bucket not imported"
-          terraform import google_storage_bucket.logs_bucket "$BUCKET_NAME-logs" 2>/dev/null || echo "Logs bucket not imported"
+          terraform import $STATE_FILE google_storage_bucket.bucket "$BUCKET_NAME" 2>/dev/null || echo "Main bucket not imported"
+          terraform import $STATE_FILE google_storage_bucket.logs_bucket "$BUCKET_NAME-logs" 2>/dev/null || echo "Logs bucket not imported"
 
           echo "Importing Service Accounts..."
-          terraform import google_service_account.cloud_run_sa "projects/$PROJECT_ID/serviceAccounts/cloud-run-sa@$PROJECT_ID.iam.gserviceaccount.com" 2>/dev/null || echo "Cloud Run SA not imported"
-          terraform import google_service_account.admin_sa "projects/$PROJECT_ID/serviceAccounts/yappa-admin-sa@$PROJECT_ID.iam.gserviceaccount.com" 2>/dev/null || echo "Admin SA not imported"
-          terraform import google_service_account.backup_sa "projects/$PROJECT_ID/serviceAccounts/yappa-backup-sa@$PROJECT_ID.iam.gserviceaccount.com" 2>/dev/null || echo "Backup SA not imported"
-          terraform import google_service_account.vpn_test_sa "projects/$PROJECT_ID/serviceAccounts/vpn-test-sa@$PROJECT_ID.iam.gserviceaccount.com" 2>/dev/null || echo "VPN Test SA not imported"
+          terraform import $STATE_FILE google_service_account.cloud_run_sa "projects/$PROJECT_ID/serviceAccounts/cloud-run-sa@$PROJECT_ID.iam.gserviceaccount.com" 2>/dev/null || echo "Cloud Run SA not imported"
+          terraform import $STATE_FILE google_service_account.admin_sa "projects/$PROJECT_ID/serviceAccounts/yappa-admin-sa@$PROJECT_ID.iam.gserviceaccount.com" 2>/dev/null || echo "Admin SA not imported"
+          terraform import $STATE_FILE google_service_account.backup_sa "projects/$PROJECT_ID/serviceAccounts/yappa-backup-sa@$PROJECT_ID.iam.gserviceaccount.com" 2>/dev/null || echo "Backup SA not imported"
+          terraform import $STATE_FILE google_service_account.vpn_test_sa "projects/$PROJECT_ID/serviceAccounts/vpn-test-sa@$PROJECT_ID.iam.gserviceaccount.com" 2>/dev/null || echo "VPN Test SA not imported"
 
           echo "📊 Resources in Terraform state after import:"
-          terraform state list
+          terraform state list $STATE_FILE
 
           echo "✅ Validating configuration..."
           terraform validate
 
           echo "📋 Planning infrastructure..."
-          terraform plan \
+          terraform plan $STATE_FILE \
             -var="project_id=$PROJECT_ID" \
             -var="region=$REGION" \
             -var="environment=dev" \
@@ -136,16 +140,14 @@ jobs:
             -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}"
 
           echo "🏗️ Applying infrastructure..."
-          terraform apply -auto-approve \
+          terraform apply -auto-approve $STATE_FILE \
             -var="project_id=$PROJECT_ID" \
             -var="region=$REGION" \
             -var="environment=dev" \
             -var="db_password=${{ secrets.DB_PASSWORD }}" \
             -var="storage_bucket_name=$BUCKET_NAME" \
             -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
-            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}"
-
-  # 3. DOCKER - Construir y subir imagen
+            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}"  # 3. DOCKER - Construir y subir imagen
   docker-build-push:
     runs-on: ubuntu-latest
     name: Build and Push Docker Image
