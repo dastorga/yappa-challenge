@@ -12,10 +12,7 @@ on:
 
 env:
   GCP_PROJECT_ID: yappa-challenge-devops
-  ARTIFACT_REGISTRY_REGION: us-central1
-  CLOUD_RUN_REGION: us-central1
   SERVICE_NAME: yappa-spring-boot-service
-  ARTIFACT_REGISTRY_URL: us-central1-docker.pkg.dev/yappa-challenge-devops/yappa-repo
 
 jobs:
   build:
@@ -59,7 +56,7 @@ jobs:
   docker-build-push:
     runs-on: ubuntu-latest
     name: Docker Build and Push
-    needs: build
+    needs: terraform-apply
     if: github.ref == 'refs/heads/main'
     environment: dev
 
@@ -85,18 +82,18 @@ jobs:
           GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
 
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY_REGION }}-docker.pkg.dev
+        run: gcloud auth configure-docker ${{ secrets.REGION }}-docker.pkg.dev
 
       - name: Build Docker image
         run: |
           cd app
-          docker build -t ${{ env.ARTIFACT_REGISTRY_URL }}/${{ env.SERVICE_NAME }}:${{ github.run_number }} .
-          docker build -t ${{ env.ARTIFACT_REGISTRY_URL }}/${{ env.SERVICE_NAME }}:latest .
+          docker build -t ${{ secrets.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }} .
+          docker build -t ${{ secrets.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:latest .
 
       - name: Push to Artifact Registry
         run: |
-          docker push ${{ env.ARTIFACT_REGISTRY_URL }}/${{ env.SERVICE_NAME }}:${{ github.run_number }}
-          docker push ${{ env.ARTIFACT_REGISTRY_URL }}/${{ env.SERVICE_NAME }}:latest
+          docker push ${{ secrets.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }}
+          docker push ${{ secrets.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:latest
 
   deploy-cloud-run:
     runs-on: ubuntu-latest
@@ -127,8 +124,8 @@ jobs:
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image=${{ env.ARTIFACT_REGISTRY_URL }}/${{ env.SERVICE_NAME }}:${{ github.run_number }} \
-            --region=${{ env.CLOUD_RUN_REGION }} \
+            --image=${{ secrets.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }} \
+            --region=${{ secrets.REGION }} \
             --platform=managed \
             --allow-unauthenticated \
             --memory=1Gi \
@@ -137,12 +134,12 @@ jobs:
             --min-instances=1 \
             --port=8080 \
             --set-env-vars="SPRING_PROFILES_ACTIVE=dev,ENVIRONMENT=dev,GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},CLOUD_SQL_INSTANCE_IP=10.2.0.3" \
-            --vpc-connector=projects/${{ env.GCP_PROJECT_ID }}/locations/${{ env.CLOUD_RUN_REGION }}/connectors/yappa-vpc-connector \
+            --vpc-connector=projects/${{ env.GCP_PROJECT_ID }}/locations/${{ secrets.REGION }}/connectors/yappa-vpc-connector \
             --vpc-egress=private-ranges-only
 
       - name: Verify deployment
         run: |
-          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.CLOUD_RUN_REGION }} --format='value(status.url)')
+          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ secrets.REGION }} --format='value(status.url)')
           echo "Service deployed at: $SERVICE_URL"
 
           sleep 30
@@ -196,7 +193,7 @@ jobs:
   terraform-apply:
     runs-on: ubuntu-latest
     name: Terraform Apply
-    needs: [build, deploy-cloud-run]
+    needs: build
     if: github.ref == 'refs/heads/main'
     environment: dev
 
