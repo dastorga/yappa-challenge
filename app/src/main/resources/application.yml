@@ -5,6 +5,7 @@ app:
   name: yappa-challenge
   version: 1.0.0
   environment: ${ENVIRONMENT:development}
+  # Pipeline trigger - testing CI/CD execution
 
 # Configuración del servidor
 server:
