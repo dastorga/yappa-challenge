@@ -166,6 +166,18 @@ jobs:
           cd terraform
           terraform init
           terraform validate
+
+          # Refresh state to sync existing resources
+          terraform apply -refresh-only -auto-approve \
+            -var="project_id=${{ secrets.PROJECT_ID }}" \
+            -var="region=${{ secrets.REGION }}" \
+            -var="environment=dev" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="storage_bucket_name=${{ secrets.STORAGE_BUCKET_NAME }}" \
+            -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
+            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" || true
+
+          # Plan with existing resources considered
           terraform plan \
             -var="project_id=${{ secrets.PROJECT_ID }}" \
             -var="region=${{ secrets.REGION }}" \
