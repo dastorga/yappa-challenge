@@ -1,0 +1,29 @@
+# Configuración específica para tests
+spring:
+  # Base de datos en memoria para tests
+  datasource:
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  h2:
+    console:
+      enabled: false
+
+# Logging para tests
+logging:
+  level:
+    org.springframework: WARN
+    org.hibernate: WARN
+    com.yappa.challenge: DEBUG
+
+# Información de la aplicación para tests
+app:
+  name: yappa-challenge-test
+  version: 1.0.0-TEST
+  environment: test
