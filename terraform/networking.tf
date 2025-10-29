@@ -1,6 +1,6 @@
 # VPC personalizada
 resource "google_compute_network" "vpc" {
-  name                    = "yappa-vpc"
+  name                    = var.vpc_name
   auto_create_subnetworks = false
   description             = "VPC personalizada para el proyecto Yappa"
 
@@ -16,7 +16,7 @@ resource "google_compute_network" "vpc" {
 
 # Subnet privada en southamerica-east1
 resource "google_compute_subnetwork" "private_subnet" {
-  name          = "yappa-private-subnet"
+  name          = var.private_subnet_name
   ip_cidr_range = var.private_subnet_cidr
   region        = var.region
   network       = google_compute_network.vpc.name
