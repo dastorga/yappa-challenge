@@ -106,39 +106,6 @@ jobs:
             echo "✅ Bucket de state creado y configurado"
           fi
 
-      - name: Import Existing Resources (if needed)
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
-        run: |
-          cd terraform
-
-          echo "🔍 Verificando si App Engine ya existe..."
-
-          # Verificar si App Engine existe en GCP
-          if gcloud app describe --project=${{ secrets.PROJECT_ID }} >/dev/null 2>&1; then
-            echo "✅ App Engine existe en GCP"
-            
-            # Verificar si ya está en el state
-            if ! terraform state show google_app_engine_application.app_engine_application >/dev/null 2>&1; then
-              echo "📥 Importando App Engine al Terraform state..."
-              terraform import \
-                -var="project_id=${{ secrets.PROJECT_ID }}" \
-                -var="region=${{ secrets.REGION }}" \
-                -var="environment=dev" \
-                -var="db_password=${{ secrets.DB_PASSWORD }}" \
-                -var="storage_bucket_name=${{ secrets.STORAGE_BUCKET_NAME }}" \
-                -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
-                -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
-                google_app_engine_application.app_engine_application \
-                ${{ secrets.PROJECT_ID }}
-              echo "✅ App Engine importado correctamente"
-            else
-              echo "✅ App Engine ya está en el state"
-            fi
-          else
-            echo "ℹ️ App Engine no existe, Terraform lo creará"
-          fi
-
       - name: Terraform Init, Refresh and Apply
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
@@ -161,12 +128,39 @@ jobs:
           echo "✅ Inicialización completada"
           echo ""
 
-          echo "✅ Paso 2: Validando configuración de Terraform..."
+          echo "🔍 Paso 2: Verificando si App Engine ya existe..."
+          # Verificar si App Engine existe en GCP
+          if gcloud app describe --project=$PROJECT_ID >/dev/null 2>&1; then
+            echo "✅ App Engine existe en GCP"
+            
+            # Verificar si ya está en el state
+            if ! terraform state show google_app_engine_application.app_engine_application >/dev/null 2>&1; then
+              echo "📥 Importando App Engine al Terraform state..."
+              terraform import \
+                -var="project_id=$PROJECT_ID" \
+                -var="region=$REGION" \
+                -var="environment=dev" \
+                -var="db_password=${{ secrets.DB_PASSWORD }}" \
+                -var="storage_bucket_name=$BUCKET_NAME" \
+                -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
+                -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
+                google_app_engine_application.app_engine_application \
+                $PROJECT_ID
+              echo "✅ App Engine importado correctamente"
+            else
+              echo "✅ App Engine ya está en el state"
+            fi
+          else
+            echo "ℹ️ App Engine no existe, Terraform lo creará"
+          fi
+          echo ""
+
+          echo "✅ Paso 3: Validando configuración de Terraform..."
           terraform validate
           echo "✅ Validación completada"
           echo ""
 
-          echo "🔄 Paso 3: Sincronizando state con infraestructura real en GCP..."
+          echo "🔄 Paso 4: Sincronizando state con infraestructura real en GCP..."
           echo "   (terraform refresh detecta recursos existentes)"
           terraform refresh \
             -var="project_id=$PROJECT_ID" \
@@ -178,7 +172,7 @@ jobs:
             -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" || echo "⚠️ Refresh completado con advertencias (normal en primera ejecución)"
           echo ""
 
-          echo "📊 Paso 4: Recursos actualmente en el state:"
+          echo "📊 Paso 5: Recursos actualmente en el state:"
           RESOURCE_COUNT=$(terraform state list 2>/dev/null | wc -l)
           if [ "$RESOURCE_COUNT" -eq "0" ]; then
             echo "   📭 No hay recursos en el state (PRIMERA EJECUCIÓN)"
@@ -190,7 +184,7 @@ jobs:
           fi
           echo ""
 
-          echo "📋 Paso 5: Generando plan de ejecución..."
+          echo "📋 Paso 6: Generando plan de ejecución..."
           echo "   ═══════════════════════════════════════════"
           echo "   (+) = Recursos NUEVOS que serán CREADOS"
           echo "   (~) = Recursos EXISTENTES que serán ACTUALIZADOS"
@@ -210,7 +204,7 @@ jobs:
             -out=tfplan
           echo ""
 
-          echo "🏗️ Paso 6: Aplicando cambios de infraestructura..."
+          echo "🏗️ Paso 7: Aplicando cambios de infraestructura..."
           echo "   ═══════════════════════════════════════════"
           echo "   ✅ Solo creará recursos NUEVOS"
           echo "   ✅ Solo actualizará recursos MODIFICADOS"
