@@ -71,3 +71,6 @@ mvnw.cmd
 *.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
+
+# Azure
+.azure/ 

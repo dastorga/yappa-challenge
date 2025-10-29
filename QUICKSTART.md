@@ -5,7 +5,7 @@ Este es un resumen ejecutivo para poner en marcha el proyecto rápidamente.
 ## Prerrequisitos
 
 ✅ Cuenta GCP con billing  
-✅ Docker, kubectl, gcloud CLI, Terraform instalados  
+✅ Docker, gcloud CLI, Terraform instalados  
 ✅ Python 3.11+
 
 ## Despliegue Rápido (10 minutos)

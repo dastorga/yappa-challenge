@@ -12,7 +12,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Variables
-PROJECT_ID="yappa-challenge-devops-442003"
+PROJECT_ID="yappa-challenge-devops"
 SERVICE_ACCOUNT_NAME="azure-devops-pipeline"
 SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 KEY_FILE="azure-devops-key.json"
