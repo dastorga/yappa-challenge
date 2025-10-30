@@ -378,15 +378,6 @@ jobs:
       - name: Deploy to Cloud Run
       - name: Ensure terraform directory exists
         run: |
-          if [ ! -d "terraform" ]; then
-            echo "Directorio terraform no existe, descargando..."
-            git clone https://github.com/dastorga/yappa-challenge.git temp-repo
-            mv temp-repo/terraform ./terraform
-            rm -rf temp-repo
-          else
-            echo "Directorio terraform ya está presente."
-          fi
-        run: |
           echo "🚀 Deploying to Cloud Run..."
           CLOUDSQL_PRIVATE_IP=$(cd terraform && terraform output -raw cloudsql_private_ip)
           echo "Usando Cloud SQL Private IP: $CLOUDSQL_PRIVATE_IP"
