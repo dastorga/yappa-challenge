@@ -49,7 +49,7 @@ resource "google_cloud_run_service" "app" {
 
         env {
           name  = "SPRING_DATASOURCE_URL"
-          value = "jdbc:postgresql://${google_sql_database_instance.postgres_instance.private_ip_address}:5432/${var.database_name}"
+          value = "jdbc:postgresql://10.27.0.3:5432/yappadb"
         }
 
         env {
