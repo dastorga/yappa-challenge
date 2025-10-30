@@ -5,7 +5,7 @@ resource "google_sql_database_instance" "postgres_instance" {
   region           = var.region
 
   lifecycle {
-    prevent_destroy = true # Protege contra eliminación accidental de la BD
+    # prevent_destroy = true # Protege contra eliminación accidental de la BD
     ignore_changes = [
       name, # Ignorar cambios en el nombre después de la creación
     ]

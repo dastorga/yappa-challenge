@@ -5,7 +5,7 @@ resource "google_compute_network" "vpc" {
   description             = "VPC personalizada para el proyecto Yappa"
 
   lifecycle {
-    prevent_destroy = true # Protege la VPC contra eliminación accidental
+    # prevent_destroy = true # Protege la VPC contra eliminación accidental
     ignore_changes = [
       name, # Ignorar cambios en el nombre después de la creación
     ]
@@ -27,7 +27,7 @@ resource "google_compute_subnetwork" "private_subnet" {
   private_ip_google_access = true
 
   lifecycle {
-    prevent_destroy = true # Protege la subnet contra eliminación accidental
+    # prevent_destroy = true # Protege la subnet contra eliminación accidental
     ignore_changes = [
       name, # Ignorar cambios en el nombre después de la creación
     ]

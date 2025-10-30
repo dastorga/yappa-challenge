@@ -4,7 +4,7 @@ resource "google_compute_address" "vpn_gateway_ip" {
   region = var.region
 
   lifecycle {
-    prevent_destroy = true # Protege la IP estática contra eliminación accidental
+    # prevent_destroy = true # Protege la IP estática contra eliminación accidental
     ignore_changes = [
       name, # Ignorar cambios en el nombre después de la creación
     ]
