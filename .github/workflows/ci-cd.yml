@@ -17,11 +17,9 @@ env:
   REGION: southamerica-east1
 
 jobs:
-  # 1. BUILD - Compilar aplicación Spring Boot
   build:
     runs-on: ubuntu-latest
     name: Build Spring Boot Application
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -56,14 +54,12 @@ jobs:
           name: app-source
           path: app/
 
-  # 2. INFRASTRUCTURE - Crear toda la infraestructura con Terraform
   infrastructure:
     runs-on: ubuntu-latest
     name: Deploy Infrastructure
     needs: build
     if: github.ref == 'refs/heads/main'
     environment: dev
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -88,9 +84,8 @@ jobs:
             echo "🆕 Creando bucket de Terraform state..."
             gcloud storage buckets create gs://${{ env.TF_STATE_BUCKET }} \
               --project=${{ env.GCP_PROJECT_ID }} \
-              --location=southamerica-east1 \
+              --location=${{ env.REGION }} \
               --uniform-bucket-level-access
-            echo "🔒 Habilitando versionado en el bucket..."
             gcloud storage buckets update gs://${{ env.TF_STATE_BUCKET }} --versioning
             echo "✅ Bucket de state creado y configurado"
           fi
@@ -98,34 +93,17 @@ jobs:
       - name: Terraform Init, Refresh and Apply
         run: |
           cd terraform
-
           PROJECT_ID="${{ env.GCP_PROJECT_ID }}"
           REGION="${{ env.REGION }}"
           BUCKET_NAME="${{ env.TF_STATE_BUCKET }}"
 
-          echo ""
-          echo "═══════════════════════════════════════════════════════════════"
-          echo "🚀 TERRAFORM DEPLOYMENT"
-          echo "═══════════════════════════════════════════════════════════════"
-          echo ""
-
-          echo "📦 Paso 1: Inicializando Terraform con backend en GCS..."
+          echo "📦 Inicializando Terraform..."
           terraform init
-          echo "✅ Inicialización completada"
-          echo ""
 
-          # (el resto de tu script terraform tal cual...)
-
+          echo "🔍 Validando..."
           terraform validate
-          terraform refresh \
-            -var="project_id=$PROJECT_ID" \
-            -var="region=$REGION" \
-            -var="environment=dev" \
-            -var="db_password=${{ secrets.DB_PASSWORD }}" \
-            -var="storage_bucket_name=$BUCKET_NAME" \
-            -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
-            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" || echo "⚠️ Refresh completado con advertencias"
 
+          echo "📊 Planificando..."
           terraform plan \
             -var="project_id=$PROJECT_ID" \
             -var="region=$REGION" \
@@ -136,24 +114,28 @@ jobs:
             -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
             -out=tfplan
 
+          echo "🏗️ Aplicando plan..."
           terraform apply -auto-approve tfplan
 
-      - name: Terraform Outputs
+      - name: Save Terraform outputs
         run: |
           cd terraform
-          echo "📊 Infrastructure Outputs:"
-          CLOUDSQL_PRIVATE_IP=$(terraform output -raw cloudsql_private_ip)
-          echo "Cloud SQL Private IP: $CLOUDSQL_PRIVATE_IP"
-          terraform output
+          mkdir -p ../tf-outputs
+          terraform output -raw cloudsql_private_ip > ../tf-outputs/cloudsql_private_ip.txt
+          terraform output > ../tf-outputs/all_outputs.txt
 
-  # 3. DOCKER - Construir y subir imagen
+      - name: Upload Terraform outputs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-outputs
+          path: tf-outputs/
+
   docker-build-push:
     runs-on: ubuntu-latest
     name: Build and Push Docker Image
     needs: infrastructure
     if: github.ref == 'refs/heads/main'
     environment: dev
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -180,22 +162,29 @@ jobs:
           echo "🔨 Building Docker image..."
           docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }} .
           docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:latest .
-
-          echo "📦 Pushing images..."
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }}
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:latest
 
-  # 4. DEPLOY - Desplegar aplicación en Cloud Run
   deploy-cloud-run:
     runs-on: ubuntu-latest
     name: Deploy to Cloud Run
     needs: docker-build-push
     if: github.ref == 'refs/heads/main'
     environment: dev
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Download Terraform outputs artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-outputs
+          path: ./tf-outputs
+
+      - name: Read Cloud SQL IP into environment
+        run: |
+          CLOUDSQL_PRIVATE_IP=$(cat ./tf-outputs/cloudsql_private_ip.txt)
+          echo "CLOUDSQL_PRIVATE_IP=$CLOUDSQL_PRIVATE_IP" >> $GITHUB_ENV
 
       - name: Autenticar con Google Cloud (ADC)
         uses: google-github-actions/auth@v2
@@ -210,7 +199,6 @@ jobs:
       - name: Deploy to Cloud Run
         run: |
           echo "🚀 Deploying to Cloud Run..."
-          CLOUDSQL_PRIVATE_IP=$(cd terraform && terraform output -raw cloudsql_private_ip)
           echo "Usando Cloud SQL Private IP: $CLOUDSQL_PRIVATE_IP"
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image=${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }} \
@@ -231,9 +219,7 @@ jobs:
           echo "🔍 Verifying deployment..."
           SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format='value(status.url)')
           echo "🌐 Service URL: $SERVICE_URL"
-
           sleep 30
           curl -f "$SERVICE_URL/" && echo "✅ Root: OK" || echo "❌ Root: FAILED"
           curl -f "$SERVICE_URL/actuator/health" && echo "✅ Health: OK" || echo "❌ Health: FAILED"
-
           echo "🎉 Deployment completed!"
