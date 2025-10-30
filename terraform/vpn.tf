@@ -16,13 +16,6 @@ resource "google_compute_vpn_gateway" "vpn_gateway" {
   name    = "yappa-vpn-gateway"
   network = google_compute_network.vpc.name
   region  = var.region
-
-  lifecycle {
-    prevent_destroy = true # Protege el VPN Gateway contra eliminación accidental
-    ignore_changes = [
-      name, # Ignorar cambios en el nombre después de la creación
-    ]
-  }
 }
 
 # Túnel VPN hacia red on-premises (simulada)
