@@ -21,6 +21,16 @@ output "private_subnet_cidr" {
   value       = google_compute_subnetwork.private_subnet.ip_cidr_range
 }
 
+# Output del VPC Connector
+output "vpc_connector_name" {
+  description = "Nombre del VPC Access Connector para Cloud Run"
+  value       = google_vpc_access_connector.yappa_vpc_connector.name
+}
+output "vpc_connector_id" {
+  description = "ID del VPC Access Connector"
+  value       = google_vpc_access_connector.yappa_vpc_connector.id
+}
+
 # Información de Cloud SQL
 output "cloudsql_instance_name" {
   description = "Nombre de la instancia Cloud SQL"

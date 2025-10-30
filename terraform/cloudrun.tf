@@ -17,6 +17,7 @@ resource "google_cloud_run_service" "app" {
 
         # Variables de entorno para conexión a Cloud SQL
         env {
+          # ...sin vpc_access, se configura en el workflow
           name  = "SPRING_PROFILES_ACTIVE"
           value = "dev"
         }

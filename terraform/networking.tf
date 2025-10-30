@@ -13,6 +13,18 @@ resource "google_compute_network" "vpc" {
 
   depends_on = [google_project_service.compute]
 }
+# VPC Access Connector para Cloud Run
+resource "google_vpc_access_connector" "yappa_vpc_connector" {
+  name           = "yappa-vpc-connector"
+  region         = var.region
+  network        = google_compute_network.vpc.name
+  ip_cidr_range  = "10.8.0.0/28" # Rango pequeño, solo para egress de Cloud Run
+  min_throughput = 200
+  max_throughput = 300
+  lifecycle {
+    ignore_changes = [network]
+  }
+}
 
 # Subnet privada en southamerica-east1
 resource "google_compute_subnetwork" "private_subnet" {
