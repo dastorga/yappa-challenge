@@ -284,6 +284,26 @@ curl -f "$SERVICE_URL/api/info"
 
 ## 🔄 CI/CD
 
+### GitHub Actions
+
+Actualmente el proyecto utiliza **GitHub Actions** para la automatización CI/CD, permitiendo despliegue continuo de la infraestructura y la aplicación en GCP.
+
+- **Motivo del cambio:** Azure DevOps presentaba errores de paralelismo en la ejecución de pipelines, mientras que GitHub Actions ofrece paralelismo gratuito y mayor estabilidad para este tipo de flujos DevOps.
+- El workflow principal se encuentra en `.github/workflows/ci-cd.yml` y ejecuta la integración, despliegue y pruebas de la infraestructura y la aplicación.
+- Puedes monitorear los pipelines en: https://github.com/dastorga/yappa-challenge/actions
+
+```yaml
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "app/**"
+      - "terraform/**"
+      - ".github/workflows/**"
+```
+
+> **Nota:** El pipeline de Azure DevOps está deshabilitado por problemas de paralelismo y limitaciones de ejecución concurrente.
+
 ### GitHub Actions Pipeline (Principal)
 
 El pipeline se ejecuta automáticamente en:

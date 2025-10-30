@@ -1,4 +1,4 @@
-name: Yappa Challenge DevOps CI/CD - Optimized
+name: Yappa Challenge DevOps CI/CD
 
 on:
   push:

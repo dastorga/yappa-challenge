@@ -105,25 +105,3 @@ resource "google_compute_firewall" "allow_ssh" {
   description   = "Permitir SSH via Identity-Aware Proxy"
 }
 
-# VPC Connector para Cloud Run
-resource "google_vpc_access_connector" "connector" {
-  name          = "yappa-vpc-connector-2026"
-  region        = "us-central1"
-  ip_cidr_range = "10.20.0.0/28"
-  network       = google_compute_network.vpc.name
-
-  min_throughput = 200
-  max_throughput = 1000
-
-  lifecycle {
-    create_before_destroy = false
-    ignore_changes = [
-      network # No intentar cambiar la red
-    ]
-  }
-
-  depends_on = [
-    google_project_service.vpcaccess,
-    google_compute_subnetwork.private_subnet
-  ]
-}
