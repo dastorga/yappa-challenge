@@ -376,19 +376,21 @@ jobs:
       - name: Deploy to Cloud Run
         run: |
           echo "🚀 Deploying to Cloud Run..."
-            gcloud run deploy ${{ env.SERVICE_NAME }} \
-              --image=${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }} \
-              --region=${{ env.REGION }} \
-              --platform=managed \
-              --allow-unauthenticated \
-              --memory=1Gi \
-              --cpu=1 \
-              --max-instances=10 \
-              --min-instances=1 \
-              --port=8080 \
-              --set-env-vars="SPRING_PROFILES_ACTIVE=dev,ENVIRONMENT=dev,GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},CLOUD_SQL_INSTANCE_IP=10.2.0.3" \
-              --vpc-connector=projects/${{ env.GCP_PROJECT_ID }}/locations/${{ env.REGION }}/connectors/yappa-vpc-connector \
-              --vpc-egress=private-ranges-only
+          CLOUDSQL_PRIVATE_IP=$(cd terraform && terraform output -raw cloudsql_private_ip)
+          echo "Usando Cloud SQL Private IP: $CLOUDSQL_PRIVATE_IP"
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }} \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --memory=1Gi \
+            --cpu=1 \
+            --max-instances=10 \
+            --min-instances=1 \
+            --port=8080 \
+            --set-env-vars="SPRING_PROFILES_ACTIVE=dev,ENVIRONMENT=dev,GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},CLOUD_SQL_INSTANCE_IP=$CLOUDSQL_PRIVATE_IP" \
+            --vpc-connector=projects/${{ env.GCP_PROJECT_ID }}/locations/${{ env.REGION }}/connectors/yappa-vpc-connector \
+            --vpc-egress=private-ranges-only
 
       - name: Verify deployment
         run: |
