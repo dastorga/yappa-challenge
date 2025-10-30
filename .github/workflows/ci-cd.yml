@@ -339,8 +339,7 @@ jobs:
           gcloud auth configure-docker ${{ secrets.REGION }}-docker.pkg.dev
         env:
           GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-
-           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
       - name: Build and Push Docker images
         run: |
           cd app
