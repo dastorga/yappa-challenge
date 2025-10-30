@@ -33,6 +33,7 @@ secrets/
 azure-devops-key.json
 gcp-key.json
 service-account-*.json
+azure-devops-key-base64.txt
 
 # IDEs
 .vscode/

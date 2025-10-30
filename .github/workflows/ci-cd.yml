@@ -72,34 +72,29 @@ jobs:
         with:
           terraform_version: 1.6.0
 
-      - name: Set up Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+      # 🟢 CAMBIO CLAVE 1: Usamos 'auth' para configurar las ADC (Application Default Credentials)
+      # Esto autentica tanto gcloud como Terraform para el resto del job.
+      - name: Autenticar con Google Cloud (ADC)
+        uses: google-github-actions/auth@v2
         with:
-          service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-          project_id: ${{ env.GCP_PROJECT_ID }}
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          project_id: ${{ env.GCP_PROJECT_ID }} # Se añade project_id aquí
 
-      - name: Set up GCP credentials
-        run: |
-          echo "$GCP_SERVICE_ACCOUNT_KEY" | base64 -d > /tmp/gcp-key.json
-          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
-          gcloud auth activate-service-account --key-file=/tmp/gcp-key.json
-          gcloud config set project ${{ secrets.PROJECT_ID }}
-        env:
-          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
-
+      # ❌ ELIMINADO: El paso 'Set up Google Cloud SDK' (setup-gcloud) ya no es necesario
+      # ❌ ELIMINADO: El paso 'Set up GCP credentials' que generaba el archivo temporal /tmp/gcp-key.json ha sido eliminado,
+      #              pues es el origen del error de credenciales no persistentes.
       - name: Verify or Create Terraform State Bucket
+        # gcloud ya está autenticado por la acción 'auth'
         run: |
           echo "🗄️ Verificando bucket de Terraform state..."
 
-          if gcloud storage buckets describe gs://${{ env.TF_STATE_BUCKET }} --project=${{ secrets.PROJECT_ID }} >/dev/null 2>&1; then
+          if gcloud storage buckets describe gs://${{ env.TF_STATE_BUCKET }} --project=${{ env.GCP_PROJECT_ID }} >/dev/null 2>&1; then
             echo "✅ Bucket de state existe: gs://${{ env.TF_STATE_BUCKET }}"
           else
             echo "🆕 Creando bucket de Terraform state..."
+            # Se ha cambiado ${{ secrets.PROJECT_ID }} por ${{ env.GCP_PROJECT_ID }} para usar la variable de entorno
             gcloud storage buckets create gs://${{ env.TF_STATE_BUCKET }} \
-              --project=${{ secrets.PROJECT_ID }} \
-          env:
-            GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
+              --project=${{ env.GCP_PROJECT_ID }} \
               --location=southamerica-east1 \
               --uniform-bucket-level-access
             
@@ -108,17 +103,17 @@ jobs:
             
             echo "✅ Bucket de state creado y configurado"
           fi
+        # ❌ ELIMINADO: La sección 'env:' con GOOGLE_APPLICATION_CREDENTIALS fue removida ya que es redundante
 
       - name: Terraform Init, Refresh and Apply
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
+        # ❌ ELIMINADO: Se quita la inyección de la variable de entorno, Terraform usará las ADC del job.
         run: |
           cd terraform
 
           # Set variables
-          PROJECT_ID="${{ secrets.PROJECT_ID }}"
+          PROJECT_ID="${{ env.GCP_PROJECT_ID }}" # Usando la variable de entorno para consistencia
           REGION="${{ secrets.REGION }}"
-          BUCKET_NAME="${{ secrets.STORAGE_BUCKET_NAME }}"
+          BUCKET_NAME="${{ env.TF_STATE_BUCKET }}" # Usando la variable de entorno para el nombre del bucket
 
           echo ""
           echo "═══════════════════════════════════════════════════════════════"
@@ -127,6 +122,7 @@ jobs:
           echo ""
 
           echo "📦 Paso 1: Inicializando Terraform con backend en GCS..."
+          # El backend de GCS ahora se autentica con las ADC establecidas por 'auth'
           terraform init
           echo "✅ Inicialización completada"
           echo ""
@@ -326,20 +322,20 @@ jobs:
           name: app-source
           path: ./app
 
-      - name: Set up Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+      # 🟢 CAMBIO CLAVE 2: Usamos la acción 'auth' en lugar de 'setup-gcloud'
+      - name: Autenticar con Google Cloud (ADC)
+        uses: google-github-actions/auth@v2
         with:
-          service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
           project_id: ${{ env.GCP_PROJECT_ID }}
 
+      # ❌ ELIMINADO: El paso 'Set up Google Cloud SDK' (setup-gcloud) ya no es necesario
       - name: Set up Docker credentials
         run: |
-          echo "$GCP_SERVICE_ACCOUNT_KEY" | base64 -d > /tmp/gcp-key.json
-          gcloud auth activate-service-account --key-file=/tmp/gcp-key.json
+          # Solo se necesita configurar Docker, la autenticación ya fue realizada
           gcloud auth configure-docker ${{ secrets.REGION }}-docker.pkg.dev
-        env:
-          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
+        # ❌ ELIMINADO: La sección 'env:' con la clave JSON y GOOGLE_APPLICATION_CREDENTIALS fue removida
+
       - name: Build and Push Docker images
         run: |
           cd app
@@ -360,19 +356,19 @@ jobs:
     environment: dev
 
     steps:
-      - name: Set up Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+      # 🟢 CAMBIO CLAVE 3: Usamos la acción 'auth' en lugar de 'setup-gcloud'
+      - name: Autenticar con Google Cloud (ADC)
+        uses: google-github-actions/auth@v2
         with:
-          service_account_key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
           project_id: ${{ env.GCP_PROJECT_ID }}
 
+      # ❌ ELIMINADO: El paso 'Set up Google Cloud SDK' (setup-gcloud) ya no es necesario
       - name: Set up Cloud Run credentials
         run: |
-          echo "$GCP_SERVICE_ACCOUNT_KEY" | base64 -d > /tmp/gcp-key.json
-          gcloud auth activate-service-account --key-file=/tmp/gcp-key.json
+          # Solo se necesita configurar el proyecto, la autenticación ya fue realizada
           gcloud config set project ${{ env.GCP_PROJECT_ID }}
-        env:
-          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+        # ❌ ELIMINADO: La sección 'env:' con la clave JSON fue removida
 
       - name: Deploy to Cloud Run
         run: |
