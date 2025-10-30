@@ -86,7 +86,7 @@ jobs:
           gcloud config set project ${{ secrets.PROJECT_ID }}
         env:
           GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
 
       - name: Verify or Create Terraform State Bucket
         run: |
