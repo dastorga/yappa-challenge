@@ -107,12 +107,23 @@ resource "google_compute_firewall" "allow_ssh" {
 
 # VPC Connector para Cloud Run
 resource "google_vpc_access_connector" "connector" {
-  name           = "yappa-vpc-connector"
-  region         = var.region
-  ip_cidr_range  = "10.9.0.0/28"
-  network        = google_compute_network.vpc.name
+  name          = "yappa-vpc-connector"
+  region        = var.region
+  ip_cidr_range = "10.9.0.0/28"
+  network       = google_compute_network.vpc.name
+
   min_throughput = 200
   max_throughput = 1000
 
-  depends_on = [google_project_service.vpcaccess]
+  lifecycle {
+    create_before_destroy = false
+    ignore_changes = [
+      network # No intentar cambiar la red
+    ]
+  }
+
+  depends_on = [
+    google_project_service.vpcaccess,
+    google_compute_subnetwork.private_subnet
+  ]
 }
