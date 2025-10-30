@@ -109,7 +109,7 @@ resource "google_compute_firewall" "allow_ssh" {
 resource "google_vpc_access_connector" "connector" {
   name          = "yappa-vpc-connector-2"
   region        = var.region
-  ip_cidr_range = "10.9.0.0/28"
+  ip_cidr_range = "10.10.0.0/28"
   network       = google_compute_network.vpc.name
 
   min_throughput = 200
