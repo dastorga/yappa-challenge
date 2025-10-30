@@ -155,7 +155,7 @@ jobs:
           fi
           echo ""
 
-          echo "🔍 Paso 2b: Verificando si VPN Gateway ya existe..."
+          echo "🔍 Paso 2b: Verificando si VPN Gateway y recursos relacionados ya existen..."
           # Verificar si VPN Gateway existe en GCP
           if gcloud compute target-vpn-gateways describe yappa-vpn-gateway --region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
             echo "✅ VPN Gateway existe en GCP"
@@ -177,8 +177,85 @@ jobs:
             else
               echo "✅ VPN Gateway ya está en el state"
             fi
+
+            # Importar Forwarding Rules si existen
+            echo "📥 Importando Forwarding Rules..."
+            
+            if gcloud compute forwarding-rules describe fr-esp --region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
+              if ! terraform state show google_compute_forwarding_rule.fr_esp >/dev/null 2>&1; then
+                terraform import \
+                  -var="project_id=$PROJECT_ID" \
+                  -var="region=$REGION" \
+                  -var="environment=dev" \
+                  -var="db_password=${{ secrets.DB_PASSWORD }}" \
+                  -var="storage_bucket_name=$BUCKET_NAME" \
+                  -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
+                  -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
+                  google_compute_forwarding_rule.fr_esp \
+                  $PROJECT_ID/$REGION/fr-esp || echo "⚠️ No se pudo importar fr-esp"
+              fi
+            fi
+            
+            if gcloud compute forwarding-rules describe fr-udp500 --region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
+              if ! terraform state show google_compute_forwarding_rule.fr_udp500 >/dev/null 2>&1; then
+                terraform import \
+                  -var="project_id=$PROJECT_ID" \
+                  -var="region=$REGION" \
+                  -var="environment=dev" \
+                  -var="db_password=${{ secrets.DB_PASSWORD }}" \
+                  -var="storage_bucket_name=$BUCKET_NAME" \
+                  -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
+                  -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
+                  google_compute_forwarding_rule.fr_udp500 \
+                  $PROJECT_ID/$REGION/fr-udp500 || echo "⚠️ No se pudo importar fr-udp500"
+              fi
+            fi
+            
+            if gcloud compute forwarding-rules describe fr-udp4500 --region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
+              if ! terraform state show google_compute_forwarding_rule.fr_udp4500 >/dev/null 2>&1; then
+                terraform import \
+                  -var="project_id=$PROJECT_ID" \
+                  -var="region=$REGION" \
+                  -var="environment=dev" \
+                  -var="db_password=${{ secrets.DB_PASSWORD }}" \
+                  -var="storage_bucket_name=$BUCKET_NAME" \
+                  -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
+                  -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
+                  google_compute_forwarding_rule.fr_udp4500 \
+                  $PROJECT_ID/$REGION/fr-udp4500 || echo "⚠️ No se pudo importar fr-udp4500"
+              fi
+            fi
+            
+            echo "✅ Forwarding Rules procesadas"
           else
             echo "ℹ️ VPN Gateway no existe, Terraform lo creará"
+          fi
+          echo ""
+
+          echo "🔍 Paso 2c: Verificando si VPC Connector ya existe..."
+          # Verificar si VPC Connector existe en GCP
+          if gcloud compute networks vpc-access connectors describe yappa-vpc-connector --region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
+            echo "✅ VPC Connector existe en GCP"
+            
+            # Verificar si ya está en el state
+            if ! terraform state show google_vpc_access_connector.connector >/dev/null 2>&1; then
+              echo "📥 Importando VPC Connector al Terraform state..."
+              terraform import \
+                -var="project_id=$PROJECT_ID" \
+                -var="region=$REGION" \
+                -var="environment=dev" \
+                -var="db_password=${{ secrets.DB_PASSWORD }}" \
+                -var="storage_bucket_name=$BUCKET_NAME" \
+                -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
+                -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
+                google_vpc_access_connector.connector \
+                projects/$PROJECT_ID/locations/$REGION/connectors/yappa-vpc-connector
+              echo "✅ VPC Connector importado correctamente"
+            else
+              echo "✅ VPC Connector ya está en el state"
+            fi
+          else
+            echo "ℹ️ VPC Connector no existe, Terraform lo creará"
           fi
           echo ""
 
