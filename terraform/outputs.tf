@@ -109,10 +109,6 @@ output "admin_service_account_email" {
 }
 
 # Información de conectividad
-output "vpc_connector_name" {
-  description = "Nombre del VPC Connector para Cloud Run"
-  value       = google_vpc_access_connector.connector.name
-}
 
 # Artifact Registry
 output "artifact_registry_repository" {
