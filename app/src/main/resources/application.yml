@@ -23,9 +23,9 @@ spring:
     timeout-per-shutdown-phase: 30s
   # Datasource configuración para Cloud SQL
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/yappadb}
+    url: jdbc:postgresql://10.27.0.3:5432/yappadb
     username: ${SPRING_DATASOURCE_USERNAME:yappa_user}
-    password: "YappaSecure2024!"
+    password: YappaSecure2024!
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -95,7 +95,7 @@ spring:
   datasource:
     url: jdbc:postgresql://10.27.0.3:5432/yappadb
     username: yappa_user
-    password: ${DB_PASSWORD:changeme}
+    password: YappaSecure2024!
   jpa:
     hibernate:
       ddl-auto: update
