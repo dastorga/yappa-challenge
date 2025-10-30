@@ -14,6 +14,7 @@ env:
   GCP_PROJECT_ID: yappa-challenge-devops
   SERVICE_NAME: yappa-spring-boot-service
   TF_STATE_BUCKET: yappa-challenge-tfstate
+  REGION: us-central1
 
 jobs:
   # 1. BUILD - Compilar aplicación Spring Boot
@@ -112,7 +113,7 @@ jobs:
 
           # Set variables
           PROJECT_ID="${{ env.GCP_PROJECT_ID }}" # Usando la variable de entorno para consistencia
-          REGION="${{ secrets.REGION }}"
+          REGION="${{ env.REGION }}"
           BUCKET_NAME="${{ env.TF_STATE_BUCKET }}" # Usando la variable de entorno para el nombre del bucket
 
           echo ""
@@ -333,19 +334,19 @@ jobs:
       - name: Set up Docker credentials
         run: |
           # Solo se necesita configurar Docker, la autenticación ya fue realizada
-          gcloud auth configure-docker ${{ secrets.REGION }}-docker.pkg.dev
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
         # ❌ ELIMINADO: La sección 'env:' con la clave JSON y GOOGLE_APPLICATION_CREDENTIALS fue removida
 
       - name: Build and Push Docker images
         run: |
           cd app
           echo "🔨 Building Docker image..."
-          docker build -t ${{ secrets.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }} .
-          docker build -t ${{ secrets.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:latest .
+          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }} .
+          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:latest .
 
           echo "📦 Pushing images..."
-          docker push ${{ secrets.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }}
-          docker push ${{ secrets.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:latest
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }}
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:latest
 
   # 4. DEPLOY - Desplegar aplicación en Cloud Run
   deploy-cloud-run:
@@ -374,8 +375,8 @@ jobs:
         run: |
           echo "🚀 Deploying to Cloud Run..."
           gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image=${{ secrets.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }} \
-            --region=${{ secrets.REGION }} \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/yappa-repo/${{ env.SERVICE_NAME }}:${{ github.run_number }} \
+            --region=${{ env.REGION }} \
             --platform=managed \
             --allow-unauthenticated \
             --memory=1Gi \
@@ -390,7 +391,7 @@ jobs:
       - name: Verify deployment
         run: |
           echo "🔍 Verifying deployment..."
-          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ secrets.REGION }} --format='value(status.url)')
+          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format='value(status.url)')
           echo "🌐 Service URL: $SERVICE_URL"
 
           sleep 30
