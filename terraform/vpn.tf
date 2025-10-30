@@ -14,7 +14,7 @@ resource "google_compute_address" "vpn_gateway_ip" {
 # VPN Gateway
 resource "google_compute_vpn_gateway" "vpn_gateway" {
   name    = "yappa-vpn-gateway"
-  network = google_compute_network.vpc.name
+  network = google_compute_network.vpc.id
   region  = var.region
 
   lifecycle {
