@@ -232,32 +232,6 @@ jobs:
           fi
           echo ""
 
-          echo "🔍 Paso 2c: Verificando si VPC Connector ya existe..."
-          # Verificar si VPC Connector existe en GCP
-          if gcloud compute networks vpc-access connectors describe yappa-vpc-connector --region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
-            echo "✅ VPC Connector existe en GCP"
-            
-            # Verificar si ya está en el state
-            if ! terraform state show google_vpc_access_connector.connector >/dev/null 2>&1; then
-              echo "📥 Importando VPC Connector al Terraform state..."
-              terraform import \
-                -var="project_id=$PROJECT_ID" \
-                -var="region=$REGION" \
-                -var="environment=dev" \
-                -var="db_password=${{ secrets.DB_PASSWORD }}" \
-                -var="storage_bucket_name=$BUCKET_NAME" \
-                -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
-                -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
-                google_vpc_access_connector.connector \
-                projects/$PROJECT_ID/locations/$REGION/connectors/yappa-vpc-connector
-              echo "✅ VPC Connector importado correctamente"
-            else
-              echo "✅ VPC Connector ya está en el state"
-            fi
-          else
-            echo "ℹ️ VPC Connector no existe, Terraform lo creará"
-          fi
-          echo ""
 
           echo "✅ Paso 3: Validando configuración de Terraform..."
           terraform validate
