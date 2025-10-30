@@ -80,13 +80,16 @@ resource "google_compute_forwarding_rule" "fr_udp4500" {
 # Ruta para el tráfico hacia la red on-premises
 resource "google_compute_route" "route_onprem" {
   name       = "route-to-onprem"
-  network    = google_compute_network.vpc.self_link
+  network    = google_compute_network.vpc.id
   dest_range = var.on_prem_cidr
   priority   = 1000
 
   next_hop_vpn_tunnel = google_compute_vpn_tunnel.tunnel_onprem.id
 
-  tags = ["vpn-route"]
+  depends_on = [
+    google_compute_vpn_tunnel.tunnel_onprem,
+    google_compute_network.vpc
+  ]
 }
 
 # Firewall rule para permitir tráfico desde on-premises
