@@ -140,11 +140,11 @@ output "connection_instructions" {
     - Storage: gs://${google_storage_bucket.bucket.name}
     - VPN Gateway: ${google_compute_address.vpn_gateway_ip.address}
     
-    🔐 Para acceder a Cloud SQL desde Cloud Run:
-    Host: ${google_sql_database_instance.postgres_instance.private_ip_address}
-    Puerto: 5432
-    Base de datos: ${google_sql_database.database.name}
-    Usuario: ${google_sql_user.db_user.name}
+  🔐 Para acceder a Cloud SQL desde Cloud Run:
+  Host: ${google_sql_database_instance.postgres_instance.private_ip_address}
+  Puerto: 5432
+  Base de datos: ${google_sql_database.database.name}
+  Usuario: ${google_sql_user.db_user.name}
     
     📝 Comandos útiles:
     - Ver logs Cloud Run: gcloud logs read "resource.type=cloud_run_revision" --limit=50

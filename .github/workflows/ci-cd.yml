@@ -304,7 +304,9 @@ jobs:
           cd terraform
           echo "📊 Infrastructure Outputs:"
           echo "═══════════════════════════════════════════════════════════════"
-          terraform output
+            CLOUDSQL_PRIVATE_IP=$(terraform output -raw cloudsql_private_ip)
+            echo "Cloud SQL Private IP: $CLOUDSQL_PRIVATE_IP"
+            terraform output
           echo "═══════════════════════════════════════════════════════════════"
           echo "✅ Infrastructure deployment completed successfully!"
 
