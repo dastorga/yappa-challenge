@@ -6,8 +6,8 @@ resource "google_cloud_run_service" "app" {
   template {
     metadata {
       annotations = {
-        "autoscaling.knative.dev/maxScale" = "10"
-        # VPC Connector se agregará cuando esté disponible en esta versión
+        "autoscaling.knative.dev/maxScale"  = "10"
+        "run.googleapis.com/timeoutSeconds" = "600"
       }
     }
 
