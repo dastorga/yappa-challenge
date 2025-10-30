@@ -47,7 +47,7 @@ RUN mkdir -p /app /app/logs
 WORKDIR /app
 
 # Copiar JAR compilado desde el builder
-COPY --from=builder /build/target/*.jar app.jar
+COPY --from=builder /build/target/challenge-devops-1.0.0.jar app.jar
 
 # Healthcheck para Docker
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
