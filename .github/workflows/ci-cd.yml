@@ -86,6 +86,7 @@ jobs:
           gcloud config set project ${{ secrets.PROJECT_ID }}
         env:
           GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
 
       - name: Verify or Create Terraform State Bucket
         run: |
@@ -97,6 +98,8 @@ jobs:
             echo "🆕 Creando bucket de Terraform state..."
             gcloud storage buckets create gs://${{ env.TF_STATE_BUCKET }} \
               --project=${{ secrets.PROJECT_ID }} \
+          env:
+            GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
               --location=southamerica-east1 \
               --uniform-bucket-level-access
             
@@ -337,6 +340,7 @@ jobs:
         env:
           GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
 
+           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
       - name: Build and Push Docker images
         run: |
           cd app
@@ -354,6 +358,8 @@ jobs:
     name: Deploy to Cloud Run
     needs: docker-build-push
     if: github.ref == 'refs/heads/main'
+          env:
+            GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
     environment: dev
 
     steps:
