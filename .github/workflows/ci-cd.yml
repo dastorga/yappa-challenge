@@ -376,7 +376,6 @@ jobs:
         # ❌ ELIMINADO: La sección 'env:' con la clave JSON fue removida
 
       - name: Deploy to Cloud Run
-      - name: Ensure terraform directory exists
         run: |
           echo "🚀 Deploying to Cloud Run..."
           CLOUDSQL_PRIVATE_IP=$(cd terraform && terraform output -raw cloudsql_private_ip)
