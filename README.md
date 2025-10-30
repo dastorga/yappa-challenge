@@ -37,7 +37,7 @@
 │  │ Spring Boot App │◄───┤  ┌─────────────────┐  ┌─────────────────────┐   │   │
 │  │ - Java 17       │    │  │   Cloud SQL     │  │    Firestore        │   │   │
 │  │ - Actuator      │    │  │   PostgreSQL    │  │    NoSQL DB         │   │   │
-│  │ - Micrometer    │    │  │   10.2.0.3      │  │                     │   │   │
+│  │ - Micrometer    │    │  │   10.27.0.3     │  │                     │   │   │
 │  │ - Port 8080     │    │  └─────────────────┘  └─────────────────────┘   │   │
 │  └─────────────────┘    │                                                  │   │
 │           │              │  ┌─────────────────┐  ┌─────────────────────┐   │   │
@@ -80,7 +80,7 @@
 ### Infraestructura GCP (55+ recursos Terraform)
 
 - **Cloud Run**: Serverless container platform principal
-- **Cloud SQL**: PostgreSQL 14 en IP privada (10.2.0.3)
+- **Cloud SQL**: PostgreSQL 14 en IP privada (10.27.0.3)
 - **Firestore**: NoSQL database para datos no estructurados
 - **Cloud Storage**: Almacenamiento de archivos estáticos
 - **VPC Network**: Red privada con subredes regionales
@@ -241,19 +241,19 @@ terraform output
 cd app
 
 # Configurar Artifact Registry
-gcloud auth configure-docker us-central1-docker.pkg.dev
+gcloud auth configure-docker southamerica-east1-docker.pkg.dev
 
 # Build y push
-docker build -t us-central1-docker.pkg.dev/$GCP_PROJECT_ID/yappa-repo/yappa-spring-boot-service:latest .
-docker push us-central1-docker.pkg.dev/$GCP_PROJECT_ID/yappa-repo/yappa-spring-boot-service:latest
+docker build -t southamerica-east1-docker.pkg.dev/$GCP_PROJECT_ID/yappa-repo/yappa-spring-boot-service:latest .
+docker push southamerica-east1-docker.pkg.dev/$GCP_PROJECT_ID/yappa-repo/yappa-spring-boot-service:latest
 ```
 
 #### 3.3 Deploy a Cloud Run
 
 ```bash
 gcloud run deploy yappa-spring-boot-service \
-  --image=us-central1-docker.pkg.dev/$GCP_PROJECT_ID/yappa-repo/yappa-spring-boot-service:latest \
-  --region=us-central1 \
+  --image=southamerica-east1-docker.pkg.dev/$GCP_PROJECT_ID/yappa-repo/yappa-spring-boot-service:latest \
+  --region=southamerica-east1 \
   --platform=managed \
   --allow-unauthenticated \
   --memory=1Gi \
@@ -261,8 +261,8 @@ gcloud run deploy yappa-spring-boot-service \
   --max-instances=10 \
   --min-instances=1 \
   --port=8080 \
-  --set-env-vars="SPRING_PROFILES_ACTIVE=dev,ENVIRONMENT=dev,GCP_PROJECT_ID=$GCP_PROJECT_ID,CLOUD_SQL_INSTANCE_IP=10.2.0.3" \
-  --vpc-connector=projects/$GCP_PROJECT_ID/locations/us-central1/connectors/yappa-vpc-connector \
+  --set-env-vars="SPRING_PROFILES_ACTIVE=dev,ENVIRONMENT=dev,GCP_PROJECT_ID=$GCP_PROJECT_ID,CLOUD_SQL_INSTANCE_IP=10.27.0.3,SPRING_DATASOURCE_PASSWORD=YappaSecure2024!" \
+  --vpc-connector=projects/$GCP_PROJECT_ID/locations/southamerica-east1/connectors/yappa-vpc-connector \
   --vpc-egress=private-ranges-only
 ```
 
@@ -271,7 +271,7 @@ gcloud run deploy yappa-spring-boot-service \
 ```bash
 # Obtener URL del servicio
 SERVICE_URL=$(gcloud run services describe yappa-spring-boot-service \
-  --region=us-central1 \
+  --region=southamerica-east1 \
   --format='value(status.url)')
 
 echo "Servicio desplegado en: $SERVICE_URL"
@@ -526,7 +526,7 @@ docker run -p 8080:8080 \
   yappa-challenge:latest
 
 # Push a Artifact Registry
-export REGISTRY_URL="us-central1-docker.pkg.dev/yappa-challenge-devops/yappa-repo"
+export REGISTRY_URL="southamerica-east1-docker.pkg.dev/yappa-challenge-devops/yappa-repo"
 docker tag yappa-challenge:latest $REGISTRY_URL/yappa-spring-boot-service:latest
 docker push $REGISTRY_URL/yappa-spring-boot-service:latest
 ```
@@ -535,11 +535,11 @@ docker push $REGISTRY_URL/yappa-spring-boot-service:latest
 
 ```bash
 # Ver logs en tiempo real
-gcloud run services logs tail yappa-spring-boot-service --region=us-central1
+gcloud run services logs tail yappa-spring-boot-service --region=southamerica-east1
 
 # Actualizar configuración
 gcloud run services update yappa-spring-boot-service \
-  --region=us-central1 \
+  --region=southamerica-east1 \
   --memory=2Gi \
   --cpu=2
 
@@ -657,9 +657,9 @@ MIT License - ver archivo [LICENSE](LICENSE)
 
 **Dario Maximiliano Astorga**  
 DevOps Engineer - Yappa Challenge  
-📧 [dario.astorga@ejemplo.com](mailto:dario.astorga@ejemplo.com)  
+📧 [astorgadm@gmail.com](mailto:astorgadm@gmail.com)  
 🐙 [GitHub](https://github.com/dastorga)  
-💼 [LinkedIn](https://linkedin.com/in/dario-astorga)
+💼 [LinkedIn](https://www.linkedin.com/in/dario-maximiliano-astorga-020221a2/)
 
 ## 🤝 Contribuciones
 
