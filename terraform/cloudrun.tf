@@ -59,7 +59,7 @@ resource "google_cloud_run_service" "app" {
 
         env {
           name  = "SPRING_DATASOURCE_PASSWORD"
-          value = var.db_password
+          value = "YappaSecure2024!"
         }
 
         env {
