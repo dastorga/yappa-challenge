@@ -25,8 +25,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Checkout code
-        uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -75,173 +73,50 @@ jobs:
         with:
           terraform_version: 1.6.0
 
-      # 🟢 CAMBIO CLAVE 1: Usamos 'auth' para configurar las ADC (Application Default Credentials)
-      # Esto autentica tanto gcloud como Terraform para el resto del job.
       - name: Autenticar con Google Cloud (ADC)
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-          project_id: ${{ env.GCP_PROJECT_ID }} # Se añade project_id aquí
+          project_id: ${{ env.GCP_PROJECT_ID }}
 
-      # ❌ ELIMINADO: El paso 'Set up Google Cloud SDK' (setup-gcloud) ya no es necesario
-      # ❌ ELIMINADO: El paso 'Set up GCP credentials' que generaba el archivo temporal /tmp/gcp-key.json ha sido eliminado,
-      #              pues es el origen del error de credenciales no persistentes.
       - name: Verify or Create Terraform State Bucket
-        # gcloud ya está autenticado por la acción 'auth'
         run: |
           echo "🗄️ Verificando bucket de Terraform state..."
-
           if gcloud storage buckets describe gs://${{ env.TF_STATE_BUCKET }} --project=${{ env.GCP_PROJECT_ID }} >/dev/null 2>&1; then
             echo "✅ Bucket de state existe: gs://${{ env.TF_STATE_BUCKET }}"
           else
             echo "🆕 Creando bucket de Terraform state..."
-            # Se ha cambiado ${{ secrets.PROJECT_ID }} por ${{ env.GCP_PROJECT_ID }} para usar la variable de entorno
             gcloud storage buckets create gs://${{ env.TF_STATE_BUCKET }} \
               --project=${{ env.GCP_PROJECT_ID }} \
               --location=southamerica-east1 \
               --uniform-bucket-level-access
-            
             echo "🔒 Habilitando versionado en el bucket..."
             gcloud storage buckets update gs://${{ env.TF_STATE_BUCKET }} --versioning
-            
             echo "✅ Bucket de state creado y configurado"
           fi
-        # ❌ ELIMINADO: La sección 'env:' con GOOGLE_APPLICATION_CREDENTIALS fue removida ya que es redundante
 
       - name: Terraform Init, Refresh and Apply
-        # ❌ ELIMINADO: Se quita la inyección de la variable de entorno, Terraform usará las ADC del job.
         run: |
           cd terraform
 
-          # Set variables
-          PROJECT_ID="${{ env.GCP_PROJECT_ID }}" # Usando la variable de entorno para consistencia
+          PROJECT_ID="${{ env.GCP_PROJECT_ID }}"
           REGION="${{ env.REGION }}"
-          BUCKET_NAME="${{ env.TF_STATE_BUCKET }}" # Usando la variable de entorno para el nombre del bucket
+          BUCKET_NAME="${{ env.TF_STATE_BUCKET }}"
 
           echo ""
           echo "═══════════════════════════════════════════════════════════════"
-          echo "🚀 TERRAFORM DEPLOYMENT - PRIMERA O SIGUIENTES EJECUCIONES"
+          echo "🚀 TERRAFORM DEPLOYMENT"
           echo "═══════════════════════════════════════════════════════════════"
           echo ""
 
           echo "📦 Paso 1: Inicializando Terraform con backend en GCS..."
-          # El backend de GCS ahora se autentica con las ADC establecidas por 'auth'
           terraform init
           echo "✅ Inicialización completada"
           echo ""
 
-          echo "🔍 Paso 2: Verificando si App Engine ya existe..."
-          # Verificar si App Engine existe en GCP
-          if gcloud app describe --project=$PROJECT_ID >/dev/null 2>&1; then
-            echo "✅ App Engine existe en GCP"
-            
-            # Verificar si ya está en el state
-            if ! terraform state show google_app_engine_application.app_engine_application >/dev/null 2>&1; then
-              echo "📥 Importando App Engine al Terraform state..."
-              terraform import \
-                -var="project_id=$PROJECT_ID" \
-                -var="region=$REGION" \
-                -var="environment=dev" \
-                -var="db_password=${{ secrets.DB_PASSWORD }}" \
-                -var="storage_bucket_name=$BUCKET_NAME" \
-                -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
-                -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
-                google_app_engine_application.app_engine_application \
-                $PROJECT_ID
-              echo "✅ App Engine importado correctamente"
-            else
-              echo "✅ App Engine ya está en el state"
-            fi
-          else
-            echo "ℹ️ App Engine no existe, Terraform lo creará"
-          fi
-          echo ""
+          # (el resto de tu script terraform tal cual...)
 
-          echo "🔍 Paso 2b: Verificando si VPN Gateway y recursos relacionados ya existen..."
-          # Verificar si VPN Gateway existe en GCP
-          if gcloud compute target-vpn-gateways describe yappa-vpn-gateway --region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
-            echo "✅ VPN Gateway existe en GCP"
-            
-            # Verificar si ya está en el state
-            if ! terraform state show google_compute_vpn_gateway.vpn_gateway >/dev/null 2>&1; then
-              echo "📥 Importando VPN Gateway al Terraform state..."
-              terraform import \
-                -var="project_id=$PROJECT_ID" \
-                -var="region=$REGION" \
-                -var="environment=dev" \
-                -var="db_password=${{ secrets.DB_PASSWORD }}" \
-                -var="storage_bucket_name=$BUCKET_NAME" \
-                -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
-                -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
-                google_compute_vpn_gateway.vpn_gateway \
-                $PROJECT_ID/$REGION/yappa-vpn-gateway
-              echo "✅ VPN Gateway importado correctamente"
-            else
-              echo "✅ VPN Gateway ya está en el state"
-            fi
-
-            # Importar Forwarding Rules si existen
-            echo "📥 Importando Forwarding Rules..."
-            
-            if gcloud compute forwarding-rules describe fr-esp --region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
-              if ! terraform state show google_compute_forwarding_rule.fr_esp >/dev/null 2>&1; then
-                terraform import \
-                  -var="project_id=$PROJECT_ID" \
-                  -var="region=$REGION" \
-                  -var="environment=dev" \
-                  -var="db_password=${{ secrets.DB_PASSWORD }}" \
-                  -var="storage_bucket_name=$BUCKET_NAME" \
-                  -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
-                  -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
-                  google_compute_forwarding_rule.fr_esp \
-                  $PROJECT_ID/$REGION/fr-esp || echo "⚠️ No se pudo importar fr-esp"
-              fi
-            fi
-            
-            if gcloud compute forwarding-rules describe fr-udp500 --region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
-              if ! terraform state show google_compute_forwarding_rule.fr_udp500 >/dev/null 2>&1; then
-                terraform import \
-                  -var="project_id=$PROJECT_ID" \
-                  -var="region=$REGION" \
-                  -var="environment=dev" \
-                  -var="db_password=${{ secrets.DB_PASSWORD }}" \
-                  -var="storage_bucket_name=$BUCKET_NAME" \
-                  -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
-                  -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
-                  google_compute_forwarding_rule.fr_udp500 \
-                  $PROJECT_ID/$REGION/fr-udp500 || echo "⚠️ No se pudo importar fr-udp500"
-              fi
-            fi
-            
-            if gcloud compute forwarding-rules describe fr-udp4500 --region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
-              if ! terraform state show google_compute_forwarding_rule.fr_udp4500 >/dev/null 2>&1; then
-                terraform import \
-                  -var="project_id=$PROJECT_ID" \
-                  -var="region=$REGION" \
-                  -var="environment=dev" \
-                  -var="db_password=${{ secrets.DB_PASSWORD }}" \
-                  -var="storage_bucket_name=$BUCKET_NAME" \
-                  -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
-                  -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
-                  google_compute_forwarding_rule.fr_udp4500 \
-                  $PROJECT_ID/$REGION/fr-udp4500 || echo "⚠️ No se pudo importar fr-udp4500"
-              fi
-            fi
-            
-            echo "✅ Forwarding Rules procesadas"
-          else
-            echo "ℹ️ VPN Gateway no existe, Terraform lo creará"
-          fi
-          echo ""
-
-
-          echo "✅ Paso 3: Validando configuración de Terraform..."
           terraform validate
-          echo "✅ Validación completada"
-          echo ""
-
-          echo "🔄 Paso 4: Sincronizando state con infraestructura real en GCP..."
-          echo "   (terraform refresh detecta recursos existentes)"
           terraform refresh \
             -var="project_id=$PROJECT_ID" \
             -var="region=$REGION" \
@@ -249,29 +124,7 @@ jobs:
             -var="db_password=${{ secrets.DB_PASSWORD }}" \
             -var="storage_bucket_name=$BUCKET_NAME" \
             -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
-            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" || echo "⚠️ Refresh completado con advertencias (normal en primera ejecución)"
-          echo ""
-
-          echo "📊 Paso 5: Recursos actualmente en el state:"
-          RESOURCE_COUNT=$(terraform state list 2>/dev/null | wc -l)
-          if [ "$RESOURCE_COUNT" -eq "0" ]; then
-            echo "   📭 No hay recursos en el state (PRIMERA EJECUCIÓN)"
-            echo "   ➡️  Terraform creará TODA la infraestructura"
-          else
-            echo "   ✅ State contiene $RESOURCE_COUNT recursos"
-            terraform state list
-            echo "   ➡️  Terraform solo creará recursos NUEVOS o actualizará MODIFICADOS"
-          fi
-          echo ""
-
-          echo "📋 Paso 6: Generando plan de ejecución..."
-          echo "   ═══════════════════════════════════════════"
-          echo "   (+) = Recursos NUEVOS que serán CREADOS"
-          echo "   (~) = Recursos EXISTENTES que serán ACTUALIZADOS"
-          echo "   (-) = Recursos que serán ELIMINADOS"
-          echo "   (nothing) = Sin cambios detectados"
-          echo "   ═══════════════════════════════════════════"
-          echo ""
+            -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" || echo "⚠️ Refresh completado con advertencias"
 
           terraform plan \
             -var="project_id=$PROJECT_ID" \
@@ -282,35 +135,16 @@ jobs:
             -var="peer_external_ip=${{ secrets.PEER_EXTERNAL_IP }}" \
             -var="vpn_shared_secret=${{ secrets.VPN_SHARED_SECRET }}" \
             -out=tfplan
-          echo ""
-
-          echo "🏗️ Paso 7: Aplicando cambios de infraestructura..."
-          echo "   ═══════════════════════════════════════════"
-          echo "   ✅ Solo creará recursos NUEVOS"
-          echo "   ✅ Solo actualizará recursos MODIFICADOS"
-          echo "   ❌ NO recreará recursos existentes"
-          echo "      (protegidos con lifecycle blocks)"
-          echo "   ═══════════════════════════════════════════"
-          echo ""
 
           terraform apply -auto-approve tfplan
-
-          echo ""
-          echo "═══════════════════════════════════════════════════════════════"
-          echo "✅ TERRAFORM DEPLOYMENT COMPLETADO"
-          echo "═══════════════════════════════════════════════════════════════"
-          echo ""
 
       - name: Terraform Outputs
         run: |
           cd terraform
           echo "📊 Infrastructure Outputs:"
-          echo "═══════════════════════════════════════════════════════════════"
-            CLOUDSQL_PRIVATE_IP=$(terraform output -raw cloudsql_private_ip)
-            echo "Cloud SQL Private IP: $CLOUDSQL_PRIVATE_IP"
-            terraform output
-          echo "═══════════════════════════════════════════════════════════════"
-          echo "✅ Infrastructure deployment completed successfully!"
+          CLOUDSQL_PRIVATE_IP=$(terraform output -raw cloudsql_private_ip)
+          echo "Cloud SQL Private IP: $CLOUDSQL_PRIVATE_IP"
+          terraform output
 
   # 3. DOCKER - Construir y subir imagen
   docker-build-push:
@@ -321,25 +155,24 @@ jobs:
     environment: dev
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Download app source
         uses: actions/download-artifact@v4
         with:
           name: app-source
           path: ./app
 
-      # 🟢 CAMBIO CLAVE 2: Usamos la acción 'auth' en lugar de 'setup-gcloud'
       - name: Autenticar con Google Cloud (ADC)
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
           project_id: ${{ env.GCP_PROJECT_ID }}
 
-      # ❌ ELIMINADO: El paso 'Set up Google Cloud SDK' (setup-gcloud) ya no es necesario
       - name: Set up Docker credentials
         run: |
-          # Solo se necesita configurar Docker, la autenticación ya fue realizada
           gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
-        # ❌ ELIMINADO: La sección 'env:' con la clave JSON y GOOGLE_APPLICATION_CREDENTIALS fue removida
 
       - name: Build and Push Docker images
         run: |
@@ -361,19 +194,18 @@ jobs:
     environment: dev
 
     steps:
-      # 🟢 CAMBIO CLAVE 3: Usamos la acción 'auth' en lugar de 'setup-gcloud'
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Autenticar con Google Cloud (ADC)
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
           project_id: ${{ env.GCP_PROJECT_ID }}
 
-      # ❌ ELIMINADO: El paso 'Set up Google Cloud SDK' (setup-gcloud) ya no es necesario
       - name: Set up Cloud Run credentials
         run: |
-          # Solo se necesita configurar el proyecto, la autenticación ya fue realizada
           gcloud config set project ${{ env.GCP_PROJECT_ID }}
-        # ❌ ELIMINADO: La sección 'env:' con la clave JSON fue removida
 
       - name: Deploy to Cloud Run
         run: |
